@@ -330,9 +330,9 @@ def plot_timeseries(
     with _DarkModeContext(dark_mode):
         colors, ls, alpha = _get_colors(grayscale)
         
-        returns.fillna(0, inplace=True)
+        returns = returns.fillna(0)
         if isinstance(benchmark, _pd.Series):
-            benchmark.fillna(0, inplace=True)
+            benchmark = benchmark.fillna(0)
 
         if match_volatility and benchmark is None:
             raise ValueError("match_volatility requires passing of " "benchmark.")
@@ -747,8 +747,7 @@ def plot_rolling_stats(
     subtitle_color = "#cccccc" if dark_mode else "gray"
     bg_color = "#1a1a1a" if dark_mode else "white"
 
-    with _DarkModeContext(dark_mode):
-        fig, ax = _plt.subplots(figsize=figsize)
+    fig, ax = _plt.subplots(figsize=figsize)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["bottom"].set_visible(False)
@@ -900,8 +899,7 @@ def plot_rolling_beta(
     subtitle_color = "#cccccc" if dark_mode else "gray"
     bg_color = "#1a1a1a" if dark_mode else "white"
 
-    with _DarkModeContext(dark_mode):
-        fig, ax = _plt.subplots(figsize=figsize)
+    fig, ax = _plt.subplots(figsize=figsize)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["bottom"].set_visible(False)
