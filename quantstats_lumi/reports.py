@@ -64,7 +64,8 @@ def html(
     benchmark: _pd.Series = None,
     rf: float = 0.0,
     grayscale: bool = False,
-    dark_mode: bool = False,
+    background_theme: str = None,
+    font_theme: str = 'dark',
     title: str = "Strategy Tearsheet",
     output: str = None,
     compounded: bool = True,
@@ -91,8 +92,10 @@ def html(
         Risk-free rate, default is 0
     grayscale : bool, optional
         Plot in grayscale, default is False
-    dark_mode : bool, optional
-        Use dark theme for the tearsheet, default is False
+    background_theme : str, optional
+        Hex color code for background theme (e.g., '#111b29'), default is None
+    font_theme : str, optional
+        Font theme, either 'light' or 'dark', default is 'dark'
     title : str, optional
         Title of the HTML report, default is "Strategy Tearsheet"
     output : str, optional
@@ -130,34 +133,268 @@ def html(
         tpl = f.read()
         f.close()
     
-    # Add dark mode class to body if dark_mode is enabled
-    # Handle body tag with or without existing attributes
-    if dark_mode:
-        # Pattern to match <body> tag with optional attributes
-        body_pattern = r'<body(\s[^>]*)?>'
-        
-        def add_dark_mode_class(match):
-            body_tag = match.group(0)
-            # Check if class attribute already exists
-            if 'class=' in body_tag:
-                # Append dark-mode to existing class
-                body_tag = _regex.sub(
-                    r'class="([^"]*)"',
-                    r'class="\1 dark-mode"',
-                    body_tag
-                )
-                # Handle class with single quotes (edge case)
-                body_tag = _regex.sub(
-                    r"class='([^']*)'",
-                    r"class='\1 dark-mode'",
-                    body_tag
-                )
-            else:
-                # Add class attribute if it doesn't exist
-                body_tag = body_tag.replace('<body', '<body class="dark-mode"', 1)
-            return body_tag
-        
-        tpl = _regex.sub(body_pattern, add_dark_mode_class, tpl)
+    # Apply theme to HTML template
+    from ._plotting.core import _derive_theme_colors
+    theme_colors = _derive_theme_colors(background_theme, font_theme)
+    
+    # Inject CSS custom properties for theme
+    # Find the :root block and add theme variables
+    root_pattern = r'(:root\s*\{[^}]*)(--bg-color:\s*[^;]+;)'
+    
+    def inject_theme_colors(match):
+        root_block = match.group(1)
+        # Replace or add theme CSS variables
+        theme_css = f"""
+            --bg-color: {theme_colors['bg_color']};
+            --text-color: {theme_colors['text_color']};
+            --light-text: {theme_colors['subtitle_color']};
+            --header-bg: {theme_colors['metrics_header_bg']};
+            --border-color: {theme_colors['edge_color']};
+            --table-row-alt: {theme_colors['metrics_bg_color']};
+            --table-hover: {theme_colors['metrics_bg_color']};
+            --primary-color: {theme_colors['text_color']};
+            --metrics-bg: {theme_colors['metrics_bg_color']};
+            --metrics-text: {theme_colors['metrics_text_color']};
+        """
+        return root_block + theme_css
+    
+    # Try to inject into :root, if not found, add a style block
+    if _regex.search(root_pattern, tpl):
+        tpl = _regex.sub(root_pattern, inject_theme_colors, tpl)
+        # Add additional CSS rules after the :root block
+        additional_css = f"""
+        /* Additional theme overrides for tables and metrics area */
+        table, table tbody, table thead {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table tr {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table th {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table td {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table thead {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        table thead th {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table tbody tr {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        table tr:nth-child(even) {{
+            background-color: var(--table-row-alt) !important;
+        }}
+        table tr:nth-child(even) td {{
+            background-color: var(--table-row-alt) !important;
+        }}
+        table tr:hover {{
+            background-color: var(--table-hover) !important;
+        }}
+        table tr:hover td {{
+            background-color: var(--table-hover) !important;
+        }}
+        /* Force all table cells to use theme colors - override any inline styles */
+        table td[style], table th[style] {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table tr[style] {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        table tr[style] td {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        /* Override any background-color inline styles */
+        table td[style*="background"], table th[style*="background"] {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        table tr[style*="background"] {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        .table-wrapper {{
+            background-color: var(--metrics-bg) !important;
+            border-color: var(--border-color) !important;
+        }}
+        #params {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        #params h3 {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        #params table {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        #params table td,
+        #params table th {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        .section {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        .section-header {{
+            background-color: var(--metrics-bg) !important;
+            padding: 12px 15px !important;
+            border-bottom: 1px solid var(--border-color) !important;
+        }}
+        .section-header h3 {{
+            color: var(--metrics-text) !important;
+            font-weight: 600 !important;
+            margin: 0 !important;
+        }}
+        .section-body {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        #params .section-header {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        #params h3 {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        .disclaimer {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        """
+        # Insert additional CSS before the closing </style> tag
+        style_close_pattern = r'(</style>)'
+        if _regex.search(style_close_pattern, tpl):
+            tpl = _regex.sub(style_close_pattern, additional_css + r'\1', tpl, count=1)
+    else:
+        # Add theme style block before </head>
+        theme_style = f"""
+        <style>
+        :root {{
+            --bg-color: {theme_colors['bg_color']};
+            --text-color: {theme_colors['text_color']};
+            --light-text: {theme_colors['subtitle_color']};
+            --header-bg: {theme_colors['metrics_header_bg']};
+            --border-color: {theme_colors['edge_color']};
+            --table-row-alt: {theme_colors['metrics_bg_color']};
+            --table-hover: {theme_colors['metrics_bg_color']};
+            --primary-color: {theme_colors['text_color']};
+            --metrics-bg: {theme_colors['metrics_bg_color']};
+            --metrics-text: {theme_colors['metrics_text_color']};
+        }}
+        /* Additional theme overrides for tables and metrics area */
+        table, table tbody, table thead {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table tr {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table th {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table td {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table thead {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        table thead th {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table tbody tr {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        table tr:nth-child(even) {{
+            background-color: var(--table-row-alt) !important;
+        }}
+        table tr:nth-child(even) td {{
+            background-color: var(--table-row-alt) !important;
+        }}
+        table tr:hover {{
+            background-color: var(--table-hover) !important;
+        }}
+        table tr:hover td {{
+            background-color: var(--table-hover) !important;
+        }}
+        /* Force all table cells to use theme colors - override any inline styles */
+        table td[style], table th[style] {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        table tr[style] {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        table tr[style] td {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        /* Override any background-color inline styles */
+        table td[style*="background"], table th[style*="background"] {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        table tr[style*="background"] {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        .table-wrapper {{
+            background-color: var(--metrics-bg) !important;
+            border-color: var(--border-color) !important;
+        }}
+        #params {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        #params h3 {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        #params table {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        #params table td,
+        #params table th {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        .section {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        .section-header {{
+            background-color: var(--metrics-bg) !important;
+            padding: 12px 15px !important;
+            border-bottom: 1px solid var(--border-color) !important;
+        }}
+        .section-header h3 {{
+            color: var(--metrics-text) !important;
+            font-weight: 600 !important;
+            margin: 0 !important;
+        }}
+        .section-body {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        #params .section-header {{
+            background-color: var(--metrics-bg) !important;
+        }}
+        #params h3 {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        .disclaimer {{
+            background-color: var(--metrics-bg) !important;
+            color: var(--metrics-text) !important;
+        }}
+        </style>
+        """
+        tpl = tpl.replace('</head>', theme_style + '</head>', 1)
 
     # prepare timeseries
     if match_dates:
@@ -396,7 +633,8 @@ def html(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(8, 5),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -420,7 +658,8 @@ def html(
             benchmark,
             match_volatility=True,
             grayscale=grayscale,
-            dark_mode=dark_mode,
+            background_theme=background_theme,
+            font_theme=font_theme,
             figsize=(8, 5),
             subtitle=False,
             savefig={"fname": figfile, "format": figfmt},
@@ -436,7 +675,8 @@ def html(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(8, 4),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -452,7 +692,8 @@ def html(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(7, 4),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -468,7 +709,8 @@ def html(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(8, 3),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -485,7 +727,8 @@ def html(
             returns,
             benchmark,
             grayscale=grayscale,
-            dark_mode=dark_mode,
+            background_theme=background_theme,
+            font_theme=font_theme,
             figsize=(8, 3),
             subtitle=False,
             window1=win_half_year,
@@ -502,7 +745,8 @@ def html(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(8, 3),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -517,7 +761,8 @@ def html(
     _plots.rolling_sharpe(
         returns,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(8, 3),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -532,7 +777,8 @@ def html(
     _plots.rolling_sortino(
         returns,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(8, 3),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -548,7 +794,8 @@ def html(
         _plots.drawdowns_periods(
             returns,
             grayscale=grayscale,
-            dark_mode=dark_mode,
+            background_theme=background_theme,
+            font_theme=font_theme,
             figsize=(8, 4),
             subtitle=False,
             title=returns.name,
@@ -566,7 +813,8 @@ def html(
             _plots.drawdowns_periods(
                 returns[col],
                 grayscale=grayscale,
-                dark_mode=dark_mode,
+                background_theme=background_theme,
+            font_theme=font_theme,
                 figsize=(8, 4),
                 subtitle=False,
                 title=col,
@@ -583,7 +831,8 @@ def html(
     _plots.drawdown(
         returns,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(8, 3),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -598,7 +847,8 @@ def html(
             returns,
             benchmark,
             grayscale=grayscale,
-            dark_mode=dark_mode,
+            background_theme=background_theme,
+            font_theme=font_theme,
             figsize=(8, 4),
             cbar=False,
             returns_label=returns.name,
@@ -616,7 +866,8 @@ def html(
                 returns[col],
                 benchmark,
                 grayscale=grayscale,
-                dark_mode=dark_mode,
+                background_theme=background_theme,
+            font_theme=font_theme,
                 figsize=(8, 4),
                 cbar=False,
                 returns_label=col,
@@ -635,7 +886,8 @@ def html(
         _plots.distribution(
             returns,
             grayscale=grayscale,
-            dark_mode=dark_mode,
+            background_theme=background_theme,
+            font_theme=font_theme,
             figsize=(8, 4),
             subtitle=False,
             title=returns.name,
@@ -652,7 +904,8 @@ def html(
             _plots.distribution(
                 returns[col],
                 grayscale=grayscale,
-                dark_mode=dark_mode,
+                background_theme=background_theme,
+            font_theme=font_theme,
                 figsize=(8, 4),
                 subtitle=False,
                 title=col,
@@ -667,6 +920,79 @@ def html(
 
     tpl = _regex.sub(r"\{\{(.*?)\}\}", "", tpl)
     tpl = tpl.replace("white-space:pre;", "")
+    
+    # Add JavaScript to force apply theme colors to all table elements
+    # This ensures any inline styles or dynamically generated content gets themed
+    if background_theme is not None:
+        theme_js = f"""
+        <script>
+        (function() {{
+            function applyThemeColors() {{
+                const metricsBg = getComputedStyle(document.documentElement).getPropertyValue('--metrics-bg').trim();
+                const metricsText = getComputedStyle(document.documentElement).getPropertyValue('--metrics-text').trim();
+                
+                // Force apply to all table elements
+                const allTables = document.querySelectorAll('table');
+                allTables.forEach(table => {{
+                    table.style.backgroundColor = metricsBg;
+                    table.style.color = metricsText;
+                    
+                    const allRows = table.querySelectorAll('tr');
+                    allRows.forEach(row => {{
+                        row.style.backgroundColor = metricsBg;
+                        row.style.color = metricsText;
+                        
+                        const allCells = row.querySelectorAll('td, th');
+                        allCells.forEach(cell => {{
+                            // Only override if it's white or very light
+                            const currentBg = window.getComputedStyle(cell).backgroundColor;
+                            const rgb = currentBg.match(/\\d+/g);
+                            if (rgb && rgb.length >= 3) {{
+                                const r = parseInt(rgb[0]);
+                                const g = parseInt(rgb[1]);
+                                const b = parseInt(rgb[2]);
+                                // If background is white or very light (RGB > 240), override it
+                                if (r > 240 && g > 240 && b > 240) {{
+                                    cell.style.backgroundColor = metricsBg;
+                                    cell.style.color = metricsText;
+                                }}
+                            }}
+                        }});
+                    }});
+                }});
+                
+                // Force apply to section headers
+                const sectionHeaders = document.querySelectorAll('.section-header');
+                sectionHeaders.forEach(header => {{
+                    header.style.backgroundColor = metricsBg;
+                    const h3 = header.querySelector('h3');
+                    if (h3) {{
+                        h3.style.color = metricsText;
+                    }}
+                }});
+                
+                // Force apply to disclaimer
+                const disclaimers = document.querySelectorAll('.disclaimer');
+                disclaimers.forEach(disclaimer => {{
+                    disclaimer.style.backgroundColor = metricsBg;
+                    disclaimer.style.color = metricsText;
+                }});
+            }}
+            
+            // Apply immediately
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', applyThemeColors);
+            }} else {{
+                applyThemeColors();
+            }}
+            
+            // Also apply after a short delay to catch any dynamically added content
+            setTimeout(applyThemeColors, 100);
+        }})();
+        </script>
+        """
+        # Insert before closing </body> tag
+        tpl = tpl.replace('</body>', theme_js + '</body>', 1)
 
     if output is None:
         # _open_html(tpl)
@@ -687,7 +1013,8 @@ def full(
     benchmark=None,
     rf=0.0,
     grayscale=False,
-    dark_mode=False,
+    background_theme=None,
+    font_theme='dark',
     figsize=(8, 5),
     display=True,
     compounded=True,
@@ -827,7 +1154,8 @@ def full(
         returns=returns,
         benchmark=benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=figsize,
         mode="full",
         periods_per_year=periods_per_year,
@@ -842,7 +1170,8 @@ def basic(
     benchmark=None,
     rf=0.0,
     grayscale=False,
-    dark_mode=False,
+    background_theme=None,
+    font_theme='dark',
     figsize=(8, 5),
     display=True,
     compounded=True,
@@ -911,7 +1240,8 @@ def basic(
         returns=returns,
         benchmark=benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=figsize,
         mode="basic",
         periods_per_year=periods_per_year,
@@ -1451,7 +1781,8 @@ def plots(
     returns,
     benchmark=None,
     grayscale=False,
-    dark_mode=False,
+    background_theme=None,
+    font_theme='dark',
     figsize=(8, 5),
     mode="basic",
     compounded=True,
@@ -1490,7 +1821,8 @@ def plots(
         _plots.snapshot(
             returns,
             grayscale=grayscale,
-            dark_mode=dark_mode,
+            background_theme=background_theme,
+            font_theme=font_theme,
             figsize=(figsize[0], figsize[0]),
             show=True,
             mode=("comp" if compounded else "sum"),
@@ -1503,7 +1835,8 @@ def plots(
                 returns,
                 benchmark,
                 grayscale=grayscale,
-                dark_mode=dark_mode,
+                background_theme=background_theme,
+                font_theme=font_theme,
                 figsize=(figsize[0], figsize[0] * 0.5),
                 show=True,
                 ylabel=False,
@@ -1516,7 +1849,8 @@ def plots(
                     returns[col].dropna(),
                     benchmark,
                     grayscale=grayscale,
-                    dark_mode=dark_mode,
+                    background_theme=background_theme,
+                    font_theme=font_theme,
                     figsize=(figsize[0], figsize[0] * 0.5),
                     show=True,
                     ylabel=False,
@@ -1540,7 +1874,8 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(figsize[0], figsize[0] * 0.6),
         show=True,
         ylabel=False,
@@ -1551,7 +1886,8 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(figsize[0], figsize[0] * 0.5),
         show=True,
         ylabel=False,
@@ -1564,7 +1900,8 @@ def plots(
             benchmark,
             match_volatility=True,
             grayscale=grayscale,
-            dark_mode=dark_mode,
+            background_theme=background_theme,
+            font_theme=font_theme,
             figsize=(figsize[0], figsize[0] * 0.5),
             show=True,
             ylabel=False,
@@ -1575,7 +1912,8 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(figsize[0], figsize[0] * 0.5),
         show=True,
         ylabel=False,
@@ -1586,7 +1924,8 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(figsize[0], figsize[0] * 0.5),
         show=True,
         ylabel=False,
@@ -1604,7 +1943,8 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=small_fig_size,
         show=True,
         ylabel=False,
@@ -1617,7 +1957,8 @@ def plots(
             returns,
             benchmark,
             grayscale=grayscale,
-            dark_mode=dark_mode,
+            background_theme=background_theme,
+            font_theme=font_theme,
             window1=win_half_year,
             window2=win_year,
             figsize=small_fig_size,
@@ -1630,7 +1971,8 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=small_fig_size,
         show=True,
         ylabel=False,
@@ -1641,7 +1983,8 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=small_fig_size,
         show=True,
         ylabel=False,
@@ -1652,7 +1995,8 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=small_fig_size,
         show=True,
         ylabel=False,
@@ -1663,7 +2007,8 @@ def plots(
         _plots.drawdowns_periods(
             returns,
             grayscale=grayscale,
-            dark_mode=dark_mode,
+            background_theme=background_theme,
+            font_theme=font_theme,
             figsize=(figsize[0], figsize[0] * 0.5),
             show=True,
             ylabel=False,
@@ -1674,7 +2019,8 @@ def plots(
             _plots.drawdowns_periods(
                 returns[col],
                 grayscale=grayscale,
-                dark_mode=dark_mode,
+                background_theme=background_theme,
+                font_theme=font_theme,
                 figsize=(figsize[0], figsize[0] * 0.5),
                 show=True,
                 ylabel=False,
@@ -1685,7 +2031,8 @@ def plots(
     _plots.drawdown(
         returns,
         grayscale=grayscale,
-        dark_mode=dark_mode,
+        background_theme=background_theme,
+        font_theme=font_theme,
         figsize=(figsize[0], figsize[0] * 0.4),
         show=True,
         ylabel=False,
@@ -1696,7 +2043,8 @@ def plots(
             returns,
             benchmark,
             grayscale=grayscale,
-            dark_mode=dark_mode,
+            background_theme=background_theme,
+            font_theme=font_theme,
             figsize=(figsize[0], figsize[0] * 0.5),
             returns_label=returns.name,
             show=True,
@@ -1709,7 +2057,8 @@ def plots(
                 returns[col],
                 benchmark,
                 grayscale=grayscale,
-                dark_mode=dark_mode,
+                background_theme=background_theme,
+                font_theme=font_theme,
                 figsize=(figsize[0], figsize[0] * 0.5),
                 show=True,
                 ylabel=False,
@@ -1722,7 +2071,8 @@ def plots(
         _plots.distribution(
             returns,
             grayscale=grayscale,
-            dark_mode=dark_mode,
+            background_theme=background_theme,
+            font_theme=font_theme,
             figsize=(figsize[0], figsize[0] * 0.5),
             show=True,
             title=returns.name,
@@ -1734,7 +2084,8 @@ def plots(
             _plots.distribution(
                 returns[col],
                 grayscale=grayscale,
-                dark_mode=dark_mode,
+                background_theme=background_theme,
+                font_theme=font_theme,
                 figsize=(figsize[0], figsize[0] * 0.5),
                 show=True,
                 title=col,
@@ -1836,6 +2187,13 @@ def _html_table(obj, showindex="default"):
     obj = obj.replace(' style="text-align: right;"', "")
     obj = obj.replace(' style="text-align: left;"', "")
     obj = obj.replace(' style="text-align: center;"', "")
+    # Remove background-color and background inline styles to allow CSS theme to apply
+    # This regex removes background-color and background from style attributes
+    obj = _regex.sub(r'background-color:\s*[^;]+;?', '', obj)
+    obj = _regex.sub(r'background:\s*[^;]+;?', '', obj)
+    # Remove empty style attributes
+    obj = _regex.sub(r' style=""', '', obj)
+    obj = _regex.sub(r' style="\s*"', '', obj)
     obj = _regex.sub("<td> +", "<td>", obj)
     obj = _regex.sub(" +</td>", "</td>", obj)
     obj = _regex.sub("<th> +", "<th>", obj)

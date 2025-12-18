@@ -50,15 +50,148 @@ _sns.set(
     },
 )
 
-# Context manager for dark mode
-class _DarkModeContext:
-    """Context manager to temporarily apply dark gray theme to matplotlib"""
-    def __init__(self, dark_mode):
-        self.dark_mode = dark_mode
+def _hex_to_rgb(hex_color):
+    """Convert hex color to RGB tuple"""
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+
+def _rgb_to_hex(rgb):
+    """Convert RGB tuple to hex color"""
+    return '#{:02x}{:02x}{:02x}'.format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+
+
+def _get_luminance(hex_color):
+    """Calculate relative luminance of a color (0-1 scale)"""
+    rgb = _hex_to_rgb(hex_color)
+    # Normalize RGB values to 0-1
+    rgb_norm = [val / 255.0 for val in rgb]
+    # Apply gamma correction
+    rgb_linear = [
+        val / 12.92 if val <= 0.03928 else ((val + 0.055) / 1.055) ** 2.4
+        for val in rgb_norm
+    ]
+    # Calculate luminance using relative luminance formula
+    luminance = 0.2126 * rgb_linear[0] + 0.7152 * rgb_linear[1] + 0.0722 * rgb_linear[2]
+    return luminance
+
+
+def _is_dark_color(hex_color):
+    """Determine if a color is dark (luminance < 0.5)"""
+    return _get_luminance(hex_color) < 0.5
+
+
+def _darken_color(hex_color, factor=0.15):
+    """
+    Darken a hex color by a given factor (0-1).
+    
+    Parameters
+    ----------
+    hex_color : str
+        Hex color code (e.g., '#111b29')
+    factor : float
+        Darkening factor (0-1), default is 0.15 (15% darker)
+    
+    Returns
+    -------
+    str
+        Darkened hex color code
+    """
+    if hex_color is None or hex_color == 'white':
+        return '#f0f0f0'  # Light gray for white backgrounds
+    
+    # Normalize hex color
+    if not hex_color.startswith('#'):
+        hex_color = '#' + hex_color
+    hex_color = hex_color.lower()
+    
+    # Convert to RGB
+    rgb = _hex_to_rgb(hex_color)
+    
+    # Darken each component
+    darkened_rgb = tuple(max(0, int(val * (1 - factor))) for val in rgb)
+    
+    # Convert back to hex
+    return _rgb_to_hex(darkened_rgb)
+
+
+def _derive_theme_colors(background_theme=None, font_theme='dark'):
+    """
+    Derive a color scheme from background theme and font theme.
+    
+    Parameters
+    ----------
+    background_theme : str or None
+        Hex color code (e.g., '#111b29') or None for default white background
+    font_theme : str
+        Either 'light' or 'dark' to specify font color theme
+    
+    Returns
+    -------
+    dict
+        Dictionary with bg_color, text_color, subtitle_color, grid_color, etc.
+    """
+    # Default background
+    if background_theme is None:
+        bg_color = 'white'
+        metrics_bg_color = '#f5f5f5'  # Light gray for metrics area
+    else:
+        # Normalize hex color
+        if not background_theme.startswith('#'):
+            background_theme = '#' + background_theme
+        bg_color = background_theme.lower()
+        # Create a darker shade for metrics area (tables, parameters)
+        metrics_bg_color = _darken_color(bg_color, factor=0.15)
+    
+    # Set font colors based on font_theme
+    if font_theme.lower() == 'light':
+        # Light text (for dark backgrounds)
+        text_color = '#ffffff'
+        subtitle_color = '#cccccc'
+        grid_color = '#666666'
+        edge_color = '#ffffff'
+        legend_bg = bg_color
+        legend_edge = '#ffffff'
+        # For metrics area with darker background, use slightly dimmer text
+        metrics_text_color = '#e0e0e0'
+        metrics_header_bg = metrics_bg_color
+    else:  # 'dark' or default
+        # Dark text (for light backgrounds)
+        text_color = '#000000'
+        subtitle_color = '#666666'
+        grid_color = '#dddddd'
+        edge_color = '#333333'
+        legend_bg = bg_color
+        legend_edge = '#cccccc'
+        # For metrics area, use same text color
+        metrics_text_color = text_color
+        metrics_header_bg = metrics_bg_color
+    
+    return {
+        'bg_color': bg_color,
+        'text_color': text_color,
+        'subtitle_color': subtitle_color,
+        'grid_color': grid_color,
+        'edge_color': edge_color,
+        'legend_bg': legend_bg,
+        'legend_edge': legend_edge,
+        'metrics_bg_color': metrics_bg_color,
+        'metrics_text_color': metrics_text_color,
+        'metrics_header_bg': metrics_header_bg,
+    }
+
+
+# Context manager for theme
+class _ThemeContext:
+    """Context manager to temporarily apply custom theme to matplotlib"""
+    def __init__(self, background_theme=None, font_theme='dark'):
+        self.background_theme = background_theme
+        self.font_theme = font_theme
         self.original_params = {}
+        self.theme_colors = _derive_theme_colors(background_theme, font_theme)
     
     def __enter__(self):
-        if self.dark_mode:
+        if self.background_theme is not None:
             # Save original parameters
             self.original_params = {
                 'figure.facecolor': _plt.rcParams.get('figure.facecolor'),
@@ -73,23 +206,23 @@ class _DarkModeContext:
                 'grid.linewidth': _plt.rcParams.get('grid.linewidth'),
             }
 
-            dark_gray = '#1a1a1a'
+            # Apply theme colors
             _plt.rcParams.update({
-                'figure.facecolor': dark_gray,
-                'axes.facecolor': dark_gray,
-                'axes.edgecolor': 'white',
-                'axes.labelcolor': 'white',
-                'text.color': 'white',
-                'xtick.color': 'white',
-                'ytick.color': 'white',
+                'figure.facecolor': self.theme_colors['bg_color'],
+                'axes.facecolor': self.theme_colors['bg_color'],
+                'axes.edgecolor': self.theme_colors['edge_color'],
+                'axes.labelcolor': self.theme_colors['text_color'],
+                'text.color': self.theme_colors['text_color'],
+                'xtick.color': self.theme_colors['text_color'],
+                'ytick.color': self.theme_colors['text_color'],
                 'axes.grid': True,
-                'grid.color': '#666666',
+                'grid.color': self.theme_colors['grid_color'],
                 'grid.linewidth': 0.5,
             })
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.dark_mode and self.original_params:
+        if self.background_theme is not None and self.original_params:
             _plt.rcParams.update(self.original_params)
 
 _FLATUI_COLORS = [
@@ -129,6 +262,8 @@ def _get_colors(grayscale):
     return colors, ls, alpha
 
 
+
+
 def plot_returns_bars(
         returns,
         benchmark=None,
@@ -143,16 +278,17 @@ def plot_returns_bars(
         log_scale=False,
         figsize=(10, 6),
         grayscale=False,
-        dark_mode=False,
+        background_theme=None,
+        font_theme='dark',
         fontname="Arial",
         ylabel=True,
         subtitle=True,
         savefig=None,
         show=True,
 ):
-    # Grayscale and dark_mode are mutually exclusive
+    # Grayscale and background_theme are mutually exclusive
     if grayscale:
-        dark_mode = False
+        background_theme = None
     if match_volatility and benchmark is None:
         raise ValueError("match_volatility requires passing of " "benchmark.")
     if match_volatility and benchmark is not None:
@@ -186,12 +322,17 @@ def plot_returns_bars(
     ax.spines["bottom"].set_visible(False)
     ax.spines["left"].set_visible(False)
 
-    # use a more precise date string for the x axis locations in the toolbar
-    text_color = "white" if dark_mode else "black"
-    subtitle_color = "#cccccc" if dark_mode else "gray"
-    bg_color = "#1a1a1a" if dark_mode else "white"
+    # Derive theme colors
+    theme_colors = _derive_theme_colors(background_theme, font_theme)
+    text_color = theme_colors['text_color']
+    subtitle_color = theme_colors['subtitle_color']
+    bg_color = theme_colors['bg_color']
+    grid_color = theme_colors['grid_color']
+    edge_color = theme_colors['edge_color']
+    legend_bg = theme_colors['legend_bg']
+    legend_edge = theme_colors['legend_edge']
     
-    with _DarkModeContext(dark_mode):
+    with _ThemeContext(background_theme, font_theme):
         fig.suptitle(
             title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color=text_color
         )
@@ -214,13 +355,13 @@ def plot_returns_bars(
         fig.set_facecolor(bg_color)
         ax.set_facecolor(bg_color)
         
-        if dark_mode:
-            ax.tick_params(colors="white")
-            ax.xaxis.label.set_color("white")
-            ax.yaxis.label.set_color("white")
+        if background_theme is not None:
+            ax.tick_params(colors=text_color)
+            ax.xaxis.label.set_color(text_color)
+            ax.yaxis.label.set_color(text_color)
             for spine in ax.spines.values():
-                spine.set_color("white")
-            ax.grid(True, color='#666666', linewidth=0.5, alpha=1.0)
+                spine.set_color(edge_color)
+            ax.grid(True, color=grid_color, linewidth=0.5, alpha=1.0)
 
         try:
             ax.set_xticklabels(df.index.year)
@@ -244,19 +385,19 @@ def plot_returns_bars(
         if hline is not None:
             if not isinstance(hline, _pd.Series):
                 if grayscale:
-                    hlcolor = "gray" if not dark_mode else "white"
+                    hlcolor = "gray" if background_theme is None else text_color
                 ax.axhline(hline, ls="--", lw=hlw, color=hlcolor, label=hllabel, zorder=2)
 
-        ax.axhline(0, ls="--", lw=1, color="white" if dark_mode else "#000000", zorder=2)
+        ax.axhline(0, ls="--", lw=1, color=text_color if background_theme is not None else "#000000", zorder=2)
 
         # if isinstance(benchmark, _pd.Series) or hline:
         legend = ax.legend(fontsize=11)
-        if dark_mode and legend is not None:
+        if background_theme is not None and legend is not None:
             for text in legend.get_texts():
-                text.set_color("white")
-            # Also style the legend frame for dark mode
-            legend.get_frame().set_facecolor('#1a1a1a')
-            legend.get_frame().set_edgecolor('white')
+                text.set_color(text_color)
+            # Style the legend frame for theme
+            legend.get_frame().set_facecolor(legend_bg)
+            legend.get_frame().set_edgecolor(legend_edge)
             legend.get_frame().set_alpha(0.8)
 
         _plt.yscale("symlog" if log_scale else "linear")
@@ -318,16 +459,28 @@ def plot_timeseries(
         figsize=(10, 6),
         ylabel="",
         grayscale=False,
-        dark_mode=False,
+        background_theme=None,
+        font_theme='dark',
         fontname="Arial",
         subtitle=True,
         savefig=None,
         show=True,
 ):
-    # Grayscale and dark_mode are mutually exclusive
+    # Grayscale and background_theme are mutually exclusive
     if grayscale:
-        dark_mode = False
-    with _DarkModeContext(dark_mode):
+        background_theme = None
+    
+    # Derive theme colors
+    theme_colors = _derive_theme_colors(background_theme, font_theme)
+    text_color = theme_colors['text_color']
+    subtitle_color = theme_colors['subtitle_color']
+    bg_color = theme_colors['bg_color']
+    grid_color = theme_colors['grid_color']
+    edge_color = theme_colors['edge_color']
+    legend_bg = theme_colors['legend_bg']
+    legend_edge = theme_colors['legend_edge']
+    
+    with _ThemeContext(background_theme, font_theme):
         colors, ls, alpha = _get_colors(grayscale)
         
         returns = returns.fillna(0)
@@ -364,10 +517,6 @@ def plot_timeseries(
         ax.spines["right"].set_visible(False)
         ax.spines["bottom"].set_visible(False)
         ax.spines["left"].set_visible(False)
-
-        text_color = "white" if dark_mode else "black"
-        subtitle_color = "#cccccc" if dark_mode else "gray"
-        bg_color = "#1a1a1a" if dark_mode else "white"
         
         fig.suptitle(
             title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color=text_color
@@ -416,20 +565,20 @@ def plot_timeseries(
         if hline is not None:
             if not isinstance(hline, _pd.Series):
                 if grayscale:
-                    hlcolor = "black" if not dark_mode else "white"
+                    hlcolor = "black" if background_theme is None else text_color
                 ax.axhline(hline, ls="--", lw=hlw, color=hlcolor, label=hllabel, zorder=2)
 
-        ax.axhline(0, ls="-", lw=1, color="gray" if not dark_mode else "#444444", zorder=1)
-        ax.axhline(0, ls="--", lw=1, color="white" if (grayscale or dark_mode) else "black", zorder=2)
+        ax.axhline(0, ls="-", lw=1, color="gray" if background_theme is None else grid_color, zorder=1)
+        ax.axhline(0, ls="--", lw=1, color=text_color if (grayscale or background_theme is not None) else "black", zorder=2)
 
         # if isinstance(benchmark, _pd.Series) or hline is not None:
         legend = ax.legend(fontsize=11)
-        if dark_mode and legend is not None:
+        if background_theme is not None and legend is not None:
             for text in legend.get_texts():
-                text.set_color("white")
-            # Also style the legend frame for dark mode
-            legend.get_frame().set_facecolor('#1a1a1a')
-            legend.get_frame().set_edgecolor('white')
+                text.set_color(text_color)
+            # Style the legend frame for theme
+            legend.get_frame().set_facecolor(legend_bg)
+            legend.get_frame().set_edgecolor(legend_edge)
             legend.get_frame().set_alpha(0.8)
 
         _plt.yscale("symlog" if log_scale else "linear")
@@ -464,13 +613,13 @@ def plot_timeseries(
             )
         ax.yaxis.set_label_coords(-0.1, 0.5)
         
-        # Update tick colors for dark mode
-        if dark_mode:
-            ax.tick_params(colors="white")
-            ax.xaxis.label.set_color("white")
-            ax.yaxis.label.set_color("white")
+        # Update tick colors for theme
+        if background_theme is not None:
+            ax.tick_params(colors=text_color)
+            ax.xaxis.label.set_color(text_color)
+            ax.yaxis.label.set_color(text_color)
             for spine in ax.spines.values():
-                spine.set_color("white")
+                spine.set_color(edge_color)
 
         if benchmark is None and len(_pd.DataFrame(returns).columns) == 1:
             ax.get_legend().remove()
@@ -509,7 +658,8 @@ def plot_histogram(
         bins=20,
         fontname="Arial",
         grayscale=False,
-        dark_mode=False,
+        background_theme=None,
+        font_theme='dark',
         title="Returns",
         kde=True,
         figsize=(10, 6),
@@ -519,9 +669,19 @@ def plot_histogram(
         savefig=None,
         show=True,
 ):
-    # Grayscale and dark_mode are mutually exclusive
+    # Grayscale and background_theme are mutually exclusive
     if grayscale:
-        dark_mode = False
+        background_theme = None
+    
+    # Derive theme colors
+    theme_colors = _derive_theme_colors(background_theme, font_theme)
+    text_color = theme_colors['text_color']
+    subtitle_color = theme_colors['subtitle_color']
+    bg_color = theme_colors['bg_color']
+    grid_color = theme_colors['grid_color']
+    edge_color = theme_colors['edge_color']
+    legend_bg = theme_colors['legend_bg']
+    legend_edge = theme_colors['legend_edge']
     # colors = ['#348dc1', '#003366', 'red']
     # if grayscale:
     #     colors = ['silver', 'gray', 'black']
@@ -549,12 +709,8 @@ def plot_histogram(
     ax.spines["right"].set_visible(False)
     ax.spines["bottom"].set_visible(False)
     ax.spines["left"].set_visible(False)
-
-    text_color = "white" if dark_mode else "black"
-    subtitle_color = "#cccccc" if dark_mode else "gray"
-    bg_color = "#1a1a1a" if dark_mode else "white"
     
-    with _DarkModeContext(dark_mode):
+    with _ThemeContext(background_theme, font_theme):
         fig.suptitle(
             title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color=text_color
         )
@@ -573,13 +729,13 @@ def plot_histogram(
         fig.set_facecolor(bg_color)
         ax.set_facecolor(bg_color)
         
-        if dark_mode:
-            ax.tick_params(colors="white")
-            ax.xaxis.label.set_color("white")
-            ax.yaxis.label.set_color("white")
+        if background_theme is not None:
+            ax.tick_params(colors=text_color)
+            ax.xaxis.label.set_color(text_color)
+            ax.yaxis.label.set_color(text_color)
             for spine in ax.spines.values():
-                spine.set_color("white")
-            ax.grid(True, color='#666666', linewidth=0.5, alpha=1.0)
+                spine.set_color(edge_color)
+            ax.grid(True, color=grid_color, linewidth=0.5, alpha=1.0)
 
         if isinstance(returns, _pd.DataFrame) and len(returns.columns) == 1:
             returns = returns[returns.columns[0]]
@@ -632,7 +788,7 @@ def plot_histogram(
                 if kde:
                     _sns.kdeplot(
                         data=combined_returns,
-                        color="white" if dark_mode else "black",
+                        color=text_color,
                         ax=ax,
                         warn_singular=False,
                     )
@@ -673,7 +829,7 @@ def plot_histogram(
                 lw=1.5,
                 zorder=2,
                 label="Average",
-                color="red" if not dark_mode else "orange",
+                color="orange" if font_theme == 'light' else "red",
             )
 
         # _plt.setp(x.get_legend().get_texts(), fontsize=11)
@@ -733,19 +889,28 @@ def plot_rolling_stats(
         figsize=(10, 6),
         ylabel="",
         grayscale=False,
-        dark_mode=False,
+        background_theme=None,
+        font_theme='dark',
         fontname="Arial",
         subtitle=True,
         savefig=None,
         show=True,
 ):
-    # Grayscale and dark_mode are mutually exclusive
+    # Grayscale and background_theme are mutually exclusive
     if grayscale:
-        dark_mode = False
+        background_theme = None
+    
+    # Derive theme colors
+    theme_colors = _derive_theme_colors(background_theme, font_theme)
+    text_color = theme_colors['text_color']
+    subtitle_color = theme_colors['subtitle_color']
+    bg_color = theme_colors['bg_color']
+    grid_color = theme_colors['grid_color']
+    edge_color = theme_colors['edge_color']
+    legend_bg = theme_colors['legend_bg']
+    legend_edge = theme_colors['legend_edge']
+    
     colors, _, _ = _get_colors(grayscale)
-    text_color = "white" if dark_mode else "black"
-    subtitle_color = "#cccccc" if dark_mode else "gray"
-    bg_color = "#1a1a1a" if dark_mode else "white"
 
     fig, ax = _plt.subplots(figsize=figsize)
     ax.spines["top"].set_visible(False)
@@ -814,10 +979,10 @@ def plot_rolling_stats(
     if hline is not None:
         if not isinstance(hline, _pd.Series):
             if grayscale:
-                hlcolor = "black" if not dark_mode else "white"
+                hlcolor = "black" if background_theme is None else text_color
             ax.axhline(hline, ls="--", lw=hlw, color=hlcolor, label=hllabel, zorder=2)
 
-    ax.axhline(0, ls="--", lw=1, color="white" if dark_mode else "#000000", zorder=2)
+    ax.axhline(0, ls="--", lw=1, color=text_color if background_theme is not None else "#000000", zorder=2)
 
     if ylabel:
         ax.set_ylabel(
@@ -825,22 +990,22 @@ def plot_rolling_stats(
         )
         ax.yaxis.set_label_coords(-0.1, 0.5)
     
-    if dark_mode:
-        ax.tick_params(colors="white")
-        ax.xaxis.label.set_color("white")
-        ax.yaxis.label.set_color("white")
+    if background_theme is not None:
+        ax.tick_params(colors=text_color)
+        ax.xaxis.label.set_color(text_color)
+        ax.yaxis.label.set_color(text_color)
         for spine in ax.spines.values():
-            spine.set_color("white")
+            spine.set_color(edge_color)
 
     ax.yaxis.set_major_formatter(_FormatStrFormatter("%.2f"))
 
     legend = ax.legend(fontsize=11)
-    if dark_mode and legend is not None:
+    if background_theme is not None and legend is not None:
         for text in legend.get_texts():
-            text.set_color("white")
-        # Also style the legend frame for dark mode
-        legend.get_frame().set_facecolor('#1a1a1a')
-        legend.get_frame().set_edgecolor('white')
+            text.set_color(text_color)
+        # Style the legend frame for theme
+        legend.get_frame().set_facecolor(legend_bg)
+        legend.get_frame().set_edgecolor(legend_edge)
         legend.get_frame().set_alpha(0.8)
 
     if benchmark is None and len(_pd.DataFrame(returns).columns) == 1:
@@ -883,7 +1048,8 @@ def plot_rolling_beta(
         hlcolor="red",
         figsize=(10, 6),
         grayscale=False,
-        dark_mode=False,
+        background_theme=None,
+        font_theme='dark',
         fontname="Arial",
         lw=1.5,
         ylabel=True,
@@ -891,13 +1057,21 @@ def plot_rolling_beta(
         savefig=None,
         show=True,
 ):
-    # Grayscale and dark_mode are mutually exclusive
+    # Grayscale and background_theme are mutually exclusive
     if grayscale:
-        dark_mode = False
+        background_theme = None
+    
+    # Derive theme colors
+    theme_colors = _derive_theme_colors(background_theme, font_theme)
+    text_color = theme_colors['text_color']
+    subtitle_color = theme_colors['subtitle_color']
+    bg_color = theme_colors['bg_color']
+    grid_color = theme_colors['grid_color']
+    edge_color = theme_colors['edge_color']
+    legend_bg = theme_colors['legend_bg']
+    legend_edge = theme_colors['legend_edge']
+    
     colors, _, _ = _get_colors(grayscale)
-    text_color = "white" if dark_mode else "black"
-    subtitle_color = "#cccccc" if dark_mode else "gray"
-    bg_color = "#1a1a1a" if dark_mode else "white"
 
     fig, ax = _plt.subplots(figsize=figsize)
     ax.spines["top"].set_visible(False)
@@ -981,12 +1155,12 @@ def plot_rolling_beta(
     ax.set_yticks([x / 100 for x in list(range(mmin, mmax, step))])
 
     if isinstance(returns, _pd.Series):
-        # Keep red color for hline in dark mode (consistent with other charts)
-        if grayscale and not dark_mode:
+        # Keep red color for hline (consistent with other charts)
+        if grayscale and background_theme is None:
             hlcolor = "black"
         ax.axhline(beta.mean(), ls="--", lw=1.5, color=hlcolor, zorder=2)
 
-    ax.axhline(0, ls="--", lw=1, color="white" if dark_mode else "#000000", zorder=2)
+    ax.axhline(0, ls="--", lw=1, color=text_color if background_theme is not None else "#000000", zorder=2)
 
     fig.autofmt_xdate()
 
@@ -999,20 +1173,20 @@ def plot_rolling_beta(
         )
         ax.yaxis.set_label_coords(-0.1, 0.5)
     
-    if dark_mode:
-        ax.tick_params(colors="white")
-        ax.xaxis.label.set_color("white")
-        ax.yaxis.label.set_color("white")
+    if background_theme is not None:
+        ax.tick_params(colors=text_color)
+        ax.xaxis.label.set_color(text_color)
+        ax.yaxis.label.set_color(text_color)
         for spine in ax.spines.values():
-            spine.set_color("white")
+            spine.set_color(edge_color)
 
     legend = ax.legend(fontsize=11)
-    if dark_mode and legend is not None:
+    if background_theme is not None and legend is not None:
         for text in legend.get_texts():
-            text.set_color("white")
-        # Also style the legend frame for dark mode
-        legend.get_frame().set_facecolor('#1a1a1a')
-        legend.get_frame().set_edgecolor('white')
+            text.set_color(text_color)
+        # Style the legend frame for theme
+        legend.get_frame().set_facecolor(legend_bg)
+        legend.get_frame().set_edgecolor(legend_edge)
         legend.get_frame().set_alpha(0.8)
     if benchmark is None and len(_pd.DataFrame(returns).columns) == 1:
         ax.get_legend().remove()
@@ -1050,7 +1224,8 @@ def plot_longest_drawdowns(
         lw=1.5,
         fontname="Arial",
         grayscale=False,
-        dark_mode=False,
+        background_theme=None,
+        font_theme='dark',
         title=None,
         log_scale=False,
         figsize=(10, 6),
@@ -1060,9 +1235,20 @@ def plot_longest_drawdowns(
         savefig=None,
         show=True,
 ):
-    # Grayscale and dark_mode are mutually exclusive
+    # Grayscale and background_theme are mutually exclusive
     if grayscale:
-        dark_mode = False
+        background_theme = None
+    
+    # Derive theme colors
+    theme_colors = _derive_theme_colors(background_theme, font_theme)
+    text_color = theme_colors['text_color']
+    subtitle_color = theme_colors['subtitle_color']
+    bg_color = theme_colors['bg_color']
+    grid_color = theme_colors['grid_color']
+    edge_color = theme_colors['edge_color']
+    legend_bg = theme_colors['legend_bg']
+    legend_edge = theme_colors['legend_edge']
+    
     colors = ["#348dc1", "#003366", "red"]
     if grayscale:
         colors = ["#000000"] * 3
@@ -1078,12 +1264,8 @@ def plot_longest_drawdowns(
     ax.spines["right"].set_visible(False)
     ax.spines["bottom"].set_visible(False)
     ax.spines["left"].set_visible(False)
-
-    text_color = "white" if dark_mode else "black"
-    subtitle_color = "#cccccc" if dark_mode else "gray"
-    bg_color = "#1a1a1a" if dark_mode else "white"
     
-    with _DarkModeContext(dark_mode):
+    with _ThemeContext(background_theme, font_theme):
         fig.suptitle(
             f"{title} - Worst %.0f Drawdown Periods" % periods + (" (Log Scaled)" if log_scale else ""),
             y=0.94,
@@ -1108,8 +1290,8 @@ def plot_longest_drawdowns(
         series = _stats.compsum(returns) if compounded else returns.cumsum()
         ax.plot(series, lw=lw, label="Backtest", color=colors[0])
 
-        highlight = "black" if (grayscale and not dark_mode) else ("#ff6666" if dark_mode else "red")
-        highlight_alpha = 0.2 if dark_mode else 0.1
+        highlight = "black" if (grayscale and background_theme is None) else ("#ff6666" if font_theme == 'light' else "red")
+        highlight_alpha = 0.2 if font_theme == 'light' else 0.1
         for _, row in longest_dd.iterrows():
             ax.axvspan(
                 *_mdates.datestr2num([str(row["start"]), str(row["end"])]),
@@ -1123,7 +1305,7 @@ def plot_longest_drawdowns(
         # use a more precise date string for the x axis locations in the toolbar
         ax.fmt_xdata = _mdates.DateFormatter("%Y-%m-%d")
 
-        ax.axhline(0, ls="--", lw=1, color="white" if dark_mode else "#000000", zorder=2)
+        ax.axhline(0, ls="--", lw=1, color=text_color if background_theme is not None else "#000000", zorder=2)
         _plt.yscale("symlog" if log_scale else "linear")
 
         # Set y-axis limits to avoid blank space at the bottom and top
@@ -1139,13 +1321,13 @@ def plot_longest_drawdowns(
             )
             ax.yaxis.set_label_coords(-0.1, 0.5)
         
-        if dark_mode:
-            ax.tick_params(colors="white")
-            ax.xaxis.label.set_color("white")
-            ax.yaxis.label.set_color("white")
+        if background_theme is not None:
+            ax.tick_params(colors=text_color)
+            ax.xaxis.label.set_color(text_color)
+            ax.yaxis.label.set_color(text_color)
             for spine in ax.spines.values():
-                spine.set_color("white")
-            ax.grid(True, color='#666666', linewidth=0.5, alpha=1.0)
+                spine.set_color(edge_color)
+            ax.grid(True, color=grid_color, linewidth=0.5, alpha=1.0)
 
         ax.yaxis.set_major_formatter(_FuncFormatter(format_pct_axis))
         # ax.yaxis.set_major_formatter(_plt.FuncFormatter(
@@ -1185,7 +1367,8 @@ def plot_distribution(
         figsize=(10, 6),
         fontname="Arial",
         grayscale=False,
-        dark_mode=False,
+        background_theme=None,
+        font_theme='dark',
         ylabel=True,
         subtitle=True,
         compounded=True,
@@ -1194,9 +1377,16 @@ def plot_distribution(
         show=True,
         log_scale=False,
 ):
-    # Grayscale and dark_mode are mutually exclusive
+    # Grayscale and background_theme are mutually exclusive
     if grayscale:
-        dark_mode = False
+        background_theme = None
+    
+    # Derive theme colors
+    theme_colors = _derive_theme_colors(background_theme, font_theme)
+    text_color = theme_colors['text_color']
+    subtitle_color = theme_colors['subtitle_color']
+    bg_color = theme_colors['bg_color']
+    edge_color = theme_colors['edge_color']
     
     colors = _FLATUI_COLORS
     if grayscale:
@@ -1219,12 +1409,8 @@ def plot_distribution(
 
     port["Yearly"] = port["Daily"].resample("YE").apply(apply_fnc)
     port["Yearly"] = port["Yearly"].ffill()
-
-    text_color = "white" if dark_mode else "black"
-    subtitle_color = "#cccccc" if dark_mode else "gray"
-    bg_color = "#1a1a1a" if dark_mode else "white"
     
-    with _DarkModeContext(dark_mode):
+    with _ThemeContext(background_theme, font_theme):
         fig, ax = _plt.subplots(figsize=figsize)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
@@ -1252,12 +1438,12 @@ def plot_distribution(
         fig.set_facecolor(bg_color)
         ax.set_facecolor(bg_color)
         
-        if dark_mode:
-            ax.tick_params(colors="white")
-            ax.xaxis.label.set_color("white")
-            ax.yaxis.label.set_color("white")
+        if background_theme is not None:
+            ax.tick_params(colors=text_color)
+            ax.xaxis.label.set_color(text_color)
+            ax.yaxis.label.set_color(text_color)
             for spine in ax.spines.values():
-                spine.set_color("white")
+                spine.set_color(edge_color)
 
         _sns.boxplot(
             data=port,
@@ -1404,7 +1590,8 @@ def plot_table(
 def monthly_heatmap_detailedview(
         returns,
         grayscale=False,
-        dark_mode=False,
+        background_theme=None,
+        font_theme='dark',
         figsize=(14, 6),
         annot_size=11,
         returns_label="Strategy",
@@ -1415,9 +1602,17 @@ def monthly_heatmap_detailedview(
         savefig=None,
         show=True,
 ):
-    # Grayscale and dark_mode are mutually exclusive
+    # Grayscale and background_theme are mutually exclusive
     if grayscale:
-        dark_mode = False
+        background_theme = None
+    
+    # Derive theme colors
+    theme_colors = _derive_theme_colors(background_theme, font_theme)
+    text_color = theme_colors['text_color']
+    subtitle_color = theme_colors['subtitle_color']
+    bg_color = theme_colors['bg_color']
+    edge_color = theme_colors['edge_color']
+    
     daily_returns = returns.pct_change(fill_method=None).fillna(0)
     monthly_returns = daily_returns.resample('ME').apply(lambda x: (x + 1).prod() - 1) * 100
     monthly_drawdowns = calculate_monthly_drawdowns(returns) * 100
@@ -1434,10 +1629,8 @@ def monthly_heatmap_detailedview(
     pivot_drawdowns = monthly_combined.pivot(index="Year", columns="Month", values="Drawdowns")
 
     cmap = "gray" if grayscale else "RdYlGn"
-    bg_color = "#1a1a1a" if dark_mode else "white"
-    text_color = "white" if dark_mode else "black"
-    tick_color = "white" if dark_mode else "#808080"
-    dimgray_color = "#cccccc" if dark_mode else "dimgray"
+    tick_color = text_color
+    dimgray_color = subtitle_color
 
     fig, ax = _plt.subplots(figsize=figsize)
     ax.set_facecolor(bg_color)
@@ -1531,12 +1724,12 @@ def monthly_heatmap_detailedview(
     _plt.xticks(rotation=0, fontsize=annot_size * 1.2)
     _plt.yticks(rotation=0, fontsize=annot_size * 1.2)
     
-    if dark_mode:
-        # Style colorbar for dark mode
+    if background_theme is not None:
+        # Style colorbar for theme
         cbar = ax.collections[0].colorbar
         if cbar is not None:
-            cbar.ax.tick_params(colors="white")
-            cbar.ax.yaxis.label.set_color("white")
+            cbar.ax.tick_params(colors=text_color)
+            cbar.ax.yaxis.label.set_color(text_color)
 
     ax.set_xlabel('')
     ax.set_ylabel('')
