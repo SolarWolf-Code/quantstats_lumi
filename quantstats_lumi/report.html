@@ -297,7 +297,7 @@
 
         .metrics-header .metric-title {
             font-size: 16px;
-            color: #999;
+            color: var(--light-text);
             text-align: center;
             font-weight: 400;
             margin-bottom: 10px;
@@ -324,7 +324,7 @@
 
         .metric-box .metric-title {
             font-size: 16px;
-            color: #999;
+            color: var(--light-text);
             margin-bottom: 5px;
             font-weight: 400;
         }
@@ -393,7 +393,7 @@
         /* Info icon styling */
         .info-icon {
             font-size: 0.8em;
-            color: #999;
+            color: var(--light-text);
             margin-left: 5px;
             vertical-align: middle;
             cursor: pointer;
@@ -506,6 +506,12 @@
             margin-bottom: 20px;
             text-align: center;
             font-weight: 500;
+        }
+
+        body.dark-mode .no-trades-message {
+            background-color: #3d3000;
+            color: #ffc107;
+            border-color: #665200;
         }
 
         /* Responsive adjustments */

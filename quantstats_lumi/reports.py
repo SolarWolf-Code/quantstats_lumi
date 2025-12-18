@@ -131,8 +131,33 @@ def html(
         f.close()
     
     # Add dark mode class to body if dark_mode is enabled
+    # Handle body tag with or without existing attributes
     if dark_mode:
-        tpl = tpl.replace('<body>', '<body class="dark-mode">')
+        # Pattern to match <body> tag with optional attributes
+        body_pattern = r'<body(\s[^>]*)?>'
+        
+        def add_dark_mode_class(match):
+            body_tag = match.group(0)
+            # Check if class attribute already exists
+            if 'class=' in body_tag:
+                # Append dark-mode to existing class
+                body_tag = _regex.sub(
+                    r'class="([^"]*)"',
+                    r'class="\1 dark-mode"',
+                    body_tag
+                )
+                # Handle class with single quotes (edge case)
+                body_tag = _regex.sub(
+                    r"class='([^']*)'",
+                    r"class='\1 dark-mode'",
+                    body_tag
+                )
+            else:
+                # Add class attribute if it doesn't exist
+                body_tag = body_tag.replace('<body', '<body class="dark-mode"', 1)
+            return body_tag
+        
+        tpl = _regex.sub(body_pattern, add_dark_mode_class, tpl)
 
     # prepare timeseries
     if match_dates:
@@ -662,6 +687,7 @@ def full(
     benchmark=None,
     rf=0.0,
     grayscale=False,
+    dark_mode=False,
     figsize=(8, 5),
     display=True,
     compounded=True,
@@ -801,6 +827,7 @@ def full(
         returns=returns,
         benchmark=benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=figsize,
         mode="full",
         periods_per_year=periods_per_year,
@@ -815,6 +842,7 @@ def basic(
     benchmark=None,
     rf=0.0,
     grayscale=False,
+    dark_mode=False,
     figsize=(8, 5),
     display=True,
     compounded=True,
@@ -883,6 +911,7 @@ def basic(
         returns=returns,
         benchmark=benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=figsize,
         mode="basic",
         periods_per_year=periods_per_year,
@@ -1422,6 +1451,7 @@ def plots(
     returns,
     benchmark=None,
     grayscale=False,
+    dark_mode=False,
     figsize=(8, 5),
     mode="basic",
     compounded=True,
@@ -1460,6 +1490,7 @@ def plots(
         _plots.snapshot(
             returns,
             grayscale=grayscale,
+            dark_mode=dark_mode,
             figsize=(figsize[0], figsize[0]),
             show=True,
             mode=("comp" if compounded else "sum"),
@@ -1472,6 +1503,7 @@ def plots(
                 returns,
                 benchmark,
                 grayscale=grayscale,
+                dark_mode=dark_mode,
                 figsize=(figsize[0], figsize[0] * 0.5),
                 show=True,
                 ylabel=False,
@@ -1484,6 +1516,7 @@ def plots(
                     returns[col].dropna(),
                     benchmark,
                     grayscale=grayscale,
+                    dark_mode=dark_mode,
                     figsize=(figsize[0], figsize[0] * 0.5),
                     show=True,
                     ylabel=False,
@@ -1507,6 +1540,7 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(figsize[0], figsize[0] * 0.6),
         show=True,
         ylabel=False,
@@ -1517,6 +1551,7 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(figsize[0], figsize[0] * 0.5),
         show=True,
         ylabel=False,
@@ -1529,6 +1564,7 @@ def plots(
             benchmark,
             match_volatility=True,
             grayscale=grayscale,
+            dark_mode=dark_mode,
             figsize=(figsize[0], figsize[0] * 0.5),
             show=True,
             ylabel=False,
@@ -1539,6 +1575,7 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(figsize[0], figsize[0] * 0.5),
         show=True,
         ylabel=False,
@@ -1549,6 +1586,7 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(figsize[0], figsize[0] * 0.5),
         show=True,
         ylabel=False,
@@ -1566,6 +1604,7 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=small_fig_size,
         show=True,
         ylabel=False,
@@ -1578,6 +1617,7 @@ def plots(
             returns,
             benchmark,
             grayscale=grayscale,
+            dark_mode=dark_mode,
             window1=win_half_year,
             window2=win_year,
             figsize=small_fig_size,
@@ -1590,6 +1630,7 @@ def plots(
         returns,
         benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=small_fig_size,
         show=True,
         ylabel=False,
@@ -1598,7 +1639,9 @@ def plots(
 
     _plots.rolling_sharpe(
         returns,
+        benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=small_fig_size,
         show=True,
         ylabel=False,
@@ -1607,7 +1650,9 @@ def plots(
 
     _plots.rolling_sortino(
         returns,
+        benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=small_fig_size,
         show=True,
         ylabel=False,
@@ -1618,6 +1663,7 @@ def plots(
         _plots.drawdowns_periods(
             returns,
             grayscale=grayscale,
+            dark_mode=dark_mode,
             figsize=(figsize[0], figsize[0] * 0.5),
             show=True,
             ylabel=False,
@@ -1628,6 +1674,7 @@ def plots(
             _plots.drawdowns_periods(
                 returns[col],
                 grayscale=grayscale,
+                dark_mode=dark_mode,
                 figsize=(figsize[0], figsize[0] * 0.5),
                 show=True,
                 ylabel=False,
@@ -1638,6 +1685,7 @@ def plots(
     _plots.drawdown(
         returns,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(figsize[0], figsize[0] * 0.4),
         show=True,
         ylabel=False,
@@ -1648,6 +1696,7 @@ def plots(
             returns,
             benchmark,
             grayscale=grayscale,
+            dark_mode=dark_mode,
             figsize=(figsize[0], figsize[0] * 0.5),
             returns_label=returns.name,
             show=True,
@@ -1660,6 +1709,7 @@ def plots(
                 returns[col],
                 benchmark,
                 grayscale=grayscale,
+                dark_mode=dark_mode,
                 figsize=(figsize[0], figsize[0] * 0.5),
                 show=True,
                 ylabel=False,
@@ -1672,6 +1722,7 @@ def plots(
         _plots.distribution(
             returns,
             grayscale=grayscale,
+            dark_mode=dark_mode,
             figsize=(figsize[0], figsize[0] * 0.5),
             show=True,
             title=returns.name,
@@ -1683,6 +1734,7 @@ def plots(
             _plots.distribution(
                 returns[col],
                 grayscale=grayscale,
+                dark_mode=dark_mode,
                 figsize=(figsize[0], figsize[0] * 0.5),
                 show=True,
                 title=col,

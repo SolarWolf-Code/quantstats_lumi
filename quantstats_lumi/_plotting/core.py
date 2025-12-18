@@ -150,6 +150,9 @@ def plot_returns_bars(
         savefig=None,
         show=True,
 ):
+    # Grayscale and dark_mode are mutually exclusive
+    if grayscale:
+        dark_mode = False
     if match_volatility and benchmark is None:
         raise ValueError("match_volatility requires passing of " "benchmark.")
     if match_volatility and benchmark is not None:
@@ -321,6 +324,9 @@ def plot_timeseries(
         savefig=None,
         show=True,
 ):
+    # Grayscale and dark_mode are mutually exclusive
+    if grayscale:
+        dark_mode = False
     with _DarkModeContext(dark_mode):
         colors, ls, alpha = _get_colors(grayscale)
         
@@ -513,6 +519,9 @@ def plot_histogram(
         savefig=None,
         show=True,
 ):
+    # Grayscale and dark_mode are mutually exclusive
+    if grayscale:
+        dark_mode = False
     # colors = ['#348dc1', '#003366', 'red']
     # if grayscale:
     #     colors = ['silver', 'gray', 'black']
@@ -586,7 +595,8 @@ def plot_histogram(
             if len(returns.columns) > 1:
                 alpha = 0.5
 
-        fix_instance = lambda x: x[x.columns[0]] if isinstance(x, _pd.DataFrame) else x
+        def fix_instance(x):
+            return x[x.columns[0]] if isinstance(x, _pd.DataFrame) else x
         if benchmark is not None:
             if isinstance(returns, _pd.Series):
                 combined_returns = (
@@ -604,7 +614,7 @@ def plot_histogram(
                     .reset_index()
                     .rename(columns={"level_1": "", 0: "Returns"})
                 )
-            x = _sns.histplot(
+            _sns.histplot(
                 data=combined_returns,
                 x="Returns",
                 bins=bins,
@@ -626,7 +636,7 @@ def plot_histogram(
                         ax=ax,
                         warn_singular=False,
                     )
-                x = _sns.histplot(
+                _sns.histplot(
                     data=combined_returns,
                     bins=bins,
                     alpha=alpha,
@@ -643,7 +653,7 @@ def plot_histogram(
                     .rename(columns={"level_1": "", 0: "Returns"})
                 )
                 # _sns.kdeplot(data=combined_returns, color='black', ax=ax, warn_singular=False)
-                x = _sns.histplot(
+                _sns.histplot(
                     data=combined_returns,
                     x="Returns",
                     bins=bins,
@@ -729,6 +739,9 @@ def plot_rolling_stats(
         savefig=None,
         show=True,
 ):
+    # Grayscale and dark_mode are mutually exclusive
+    if grayscale:
+        dark_mode = False
     colors, _, _ = _get_colors(grayscale)
     text_color = "white" if dark_mode else "black"
     subtitle_color = "#cccccc" if dark_mode else "gray"
@@ -879,6 +892,9 @@ def plot_rolling_beta(
         savefig=None,
         show=True,
 ):
+    # Grayscale and dark_mode are mutually exclusive
+    if grayscale:
+        dark_mode = False
     colors, _, _ = _get_colors(grayscale)
     text_color = "white" if dark_mode else "black"
     subtitle_color = "#cccccc" if dark_mode else "gray"
@@ -967,7 +983,9 @@ def plot_rolling_beta(
     ax.set_yticks([x / 100 for x in list(range(mmin, mmax, step))])
 
     if isinstance(returns, _pd.Series):
-        hlcolor = "black" if (grayscale and not dark_mode) else ("white" if dark_mode else hlcolor)
+        # Keep red color for hline in dark mode (consistent with other charts)
+        if grayscale and not dark_mode:
+            hlcolor = "black"
         ax.axhline(beta.mean(), ls="--", lw=1.5, color=hlcolor, zorder=2)
 
     ax.axhline(0, ls="--", lw=1, color="white" if dark_mode else "#000000", zorder=2)
@@ -1011,11 +1029,11 @@ def plot_rolling_beta(
     except Exception:
         pass
 
-        if savefig:
-            if isinstance(savefig, dict):
-                _plt.savefig(**savefig)
-            else:
-                _plt.savefig(savefig)
+    if savefig:
+        if isinstance(savefig, dict):
+            _plt.savefig(**savefig)
+        else:
+            _plt.savefig(savefig)
 
     if show:
         _plt.show(block=False)
@@ -1044,6 +1062,9 @@ def plot_longest_drawdowns(
         savefig=None,
         show=True,
 ):
+    # Grayscale and dark_mode are mutually exclusive
+    if grayscale:
+        dark_mode = False
     colors = ["#348dc1", "#003366", "red"]
     if grayscale:
         colors = ["#000000"] * 3
@@ -1175,6 +1196,10 @@ def plot_distribution(
         show=True,
         log_scale=False,
 ):
+    # Grayscale and dark_mode are mutually exclusive
+    if grayscale:
+        dark_mode = False
+    
     colors = _FLATUI_COLORS
     if grayscale:
         colors = ["#f9f9f9", "#dddddd", "#bbbbbb", "#999999", "#808080"]
@@ -1381,6 +1406,7 @@ def plot_table(
 def monthly_heatmap_detailedview(
         returns,
         grayscale=False,
+        dark_mode=False,
         figsize=(14, 6),
         annot_size=11,
         returns_label="Strategy",
@@ -1391,6 +1417,9 @@ def monthly_heatmap_detailedview(
         savefig=None,
         show=True,
 ):
+    # Grayscale and dark_mode are mutually exclusive
+    if grayscale:
+        dark_mode = False
     daily_returns = returns.pct_change(fill_method=None).fillna(0)
     monthly_returns = daily_returns.resample('ME').apply(lambda x: (x + 1).prod() - 1) * 100
     monthly_drawdowns = calculate_monthly_drawdowns(returns) * 100
@@ -1407,10 +1436,14 @@ def monthly_heatmap_detailedview(
     pivot_drawdowns = monthly_combined.pivot(index="Year", columns="Month", values="Drawdowns")
 
     cmap = "gray" if grayscale else "RdYlGn"
+    bg_color = "#1a1a1a" if dark_mode else "white"
+    text_color = "white" if dark_mode else "black"
+    tick_color = "white" if dark_mode else "#808080"
+    dimgray_color = "#cccccc" if dark_mode else "dimgray"
 
     fig, ax = _plt.subplots(figsize=figsize)
-    ax.set_facecolor("white")
-    fig.set_facecolor("white")
+    ax.set_facecolor(bg_color)
+    fig.set_facecolor(bg_color)
 
     annot_returns = pivot_returns.map(lambda x: f"{x:.2f}" if _pd.notnull(x) else "")
     annot_drawdowns = pivot_drawdowns.map(lambda x: f"{x:.2f}" if _pd.notnull(x) else "")
@@ -1443,7 +1476,7 @@ def monthly_heatmap_detailedview(
                 cell = ax.get_children()[cell_index]
                 return_color = cell.get_color()
 
-                monthly_dd_color = 'white' if return_color == 'w' else 'dimgray'
+                monthly_dd_color = 'white' if return_color == 'w' else dimgray_color
                 ax.text(j + 0.5, i + 0.55, annot_drawdowns.iloc[i, j],
                         ha='center', va='top', fontsize=return_font_size * monthly_dd_font_rate,
                         color=monthly_dd_color)
@@ -1468,7 +1501,8 @@ def monthly_heatmap_detailedview(
                 verticalalignment='center',
                 horizontalalignment='right',
                 fontsize=annot_size * 1.0,  # Maybe, 1.0 can be new argument like ytick_font_rate
-                transform=ax.transData)
+                transform=ax.transData,
+                color=text_color)
 
         # Add Drawdown
         ax.text(-0.1, idx + 0.75, f"{annual_dd[pivot_returns.index[idx]]:.2f}",
@@ -1476,26 +1510,35 @@ def monthly_heatmap_detailedview(
                 horizontalalignment='right',
                 fontsize=annot_size * annual_dd_font_rate,  # Set Drawdown font size slightly smaller
                 transform=ax.transData,
-                color='dimgray')
+                color=dimgray_color)
 
     # Add YTD label
     ax.text(-0.1, len(pivot_returns.index) * 1.02, 'YTD', fontsize=annot_size,
             verticalalignment='center', horizontalalignment='right',
-            transform=ax.transData)
+            transform=ax.transData,
+            color=text_color)
 
     ax.set_title(
         f"{returns_label} - Monthly Returns & Drawdowns (%)",
         fontsize=14,
         fontname=fontname,
-        fontweight="bold"
+        fontweight="bold",
+        color=text_color
     )
 
     month_abbr = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
     _plt.xticks(ticks=_np.arange(0.5, 12.5, 1), labels=month_abbr, rotation=0, fontsize=annot_size)
 
-    ax.tick_params(colors="#808080")
+    ax.tick_params(colors=tick_color)
     _plt.xticks(rotation=0, fontsize=annot_size * 1.2)
     _plt.yticks(rotation=0, fontsize=annot_size * 1.2)
+    
+    if dark_mode:
+        # Style colorbar for dark mode
+        cbar = ax.collections[0].colorbar
+        if cbar is not None:
+            cbar.ax.tick_params(colors="white")
+            cbar.ax.yaxis.label.set_color("white")
 
     ax.set_xlabel('')
     ax.set_ylabel('')
