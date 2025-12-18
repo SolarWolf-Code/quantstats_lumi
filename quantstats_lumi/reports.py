@@ -64,6 +64,7 @@ def html(
     benchmark: _pd.Series = None,
     rf: float = 0.0,
     grayscale: bool = False,
+    dark_mode: bool = False,
     title: str = "Strategy Tearsheet",
     output: str = None,
     compounded: bool = True,
@@ -90,6 +91,8 @@ def html(
         Risk-free rate, default is 0
     grayscale : bool, optional
         Plot in grayscale, default is False
+    dark_mode : bool, optional
+        Use dark theme for the tearsheet, default is False
     title : str, optional
         Title of the HTML report, default is "Strategy Tearsheet"
     output : str, optional
@@ -126,6 +129,10 @@ def html(
     with open(template_path or __file__[:-4] + ".html", encoding='utf-8') as f:
         tpl = f.read()
         f.close()
+    
+    # Add dark mode class to body if dark_mode is enabled
+    if dark_mode:
+        tpl = tpl.replace('<body>', '<body class="dark-mode">')
 
     # prepare timeseries
     if match_dates:
@@ -364,6 +371,7 @@ def html(
         returns,
         benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(8, 5),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -387,6 +395,7 @@ def html(
             benchmark,
             match_volatility=True,
             grayscale=grayscale,
+            dark_mode=dark_mode,
             figsize=(8, 5),
             subtitle=False,
             savefig={"fname": figfile, "format": figfmt},
@@ -402,6 +411,7 @@ def html(
         returns,
         benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(8, 4),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -417,6 +427,7 @@ def html(
         returns,
         benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(7, 4),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -432,6 +443,7 @@ def html(
         returns,
         benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(8, 3),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -448,6 +460,7 @@ def html(
             returns,
             benchmark,
             grayscale=grayscale,
+            dark_mode=dark_mode,
             figsize=(8, 3),
             subtitle=False,
             window1=win_half_year,
@@ -464,6 +477,7 @@ def html(
         returns,
         benchmark,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(8, 3),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -478,6 +492,7 @@ def html(
     _plots.rolling_sharpe(
         returns,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(8, 3),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -492,6 +507,7 @@ def html(
     _plots.rolling_sortino(
         returns,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(8, 3),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -507,6 +523,7 @@ def html(
         _plots.drawdowns_periods(
             returns,
             grayscale=grayscale,
+            dark_mode=dark_mode,
             figsize=(8, 4),
             subtitle=False,
             title=returns.name,
@@ -524,6 +541,7 @@ def html(
             _plots.drawdowns_periods(
                 returns[col],
                 grayscale=grayscale,
+                dark_mode=dark_mode,
                 figsize=(8, 4),
                 subtitle=False,
                 title=col,
@@ -540,6 +558,7 @@ def html(
     _plots.drawdown(
         returns,
         grayscale=grayscale,
+        dark_mode=dark_mode,
         figsize=(8, 3),
         subtitle=False,
         savefig={"fname": figfile, "format": figfmt},
@@ -554,6 +573,7 @@ def html(
             returns,
             benchmark,
             grayscale=grayscale,
+            dark_mode=dark_mode,
             figsize=(8, 4),
             cbar=False,
             returns_label=returns.name,
@@ -571,6 +591,7 @@ def html(
                 returns[col],
                 benchmark,
                 grayscale=grayscale,
+                dark_mode=dark_mode,
                 figsize=(8, 4),
                 cbar=False,
                 returns_label=col,
@@ -589,6 +610,7 @@ def html(
         _plots.distribution(
             returns,
             grayscale=grayscale,
+            dark_mode=dark_mode,
             figsize=(8, 4),
             subtitle=False,
             title=returns.name,
@@ -605,6 +627,7 @@ def html(
             _plots.distribution(
                 returns[col],
                 grayscale=grayscale,
+                dark_mode=dark_mode,
                 figsize=(8, 4),
                 subtitle=False,
                 title=col,

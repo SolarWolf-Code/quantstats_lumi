@@ -50,6 +50,48 @@ _sns.set(
     },
 )
 
+# Context manager for dark mode
+class _DarkModeContext:
+    """Context manager to temporarily apply dark gray theme to matplotlib"""
+    def __init__(self, dark_mode):
+        self.dark_mode = dark_mode
+        self.original_params = {}
+    
+    def __enter__(self):
+        if self.dark_mode:
+            # Save original parameters
+            self.original_params = {
+                'figure.facecolor': _plt.rcParams.get('figure.facecolor'),
+                'axes.facecolor': _plt.rcParams.get('axes.facecolor'),
+                'axes.edgecolor': _plt.rcParams.get('axes.edgecolor'),
+                'axes.labelcolor': _plt.rcParams.get('axes.labelcolor'),
+                'text.color': _plt.rcParams.get('text.color'),
+                'xtick.color': _plt.rcParams.get('xtick.color'),
+                'ytick.color': _plt.rcParams.get('ytick.color'),
+                'axes.grid': _plt.rcParams.get('axes.grid'),
+                'grid.color': _plt.rcParams.get('grid.color'),
+                'grid.linewidth': _plt.rcParams.get('grid.linewidth'),
+            }
+
+            dark_gray = '#1a1a1a'
+            _plt.rcParams.update({
+                'figure.facecolor': dark_gray,
+                'axes.facecolor': dark_gray,
+                'axes.edgecolor': 'white',
+                'axes.labelcolor': 'white',
+                'text.color': 'white',
+                'xtick.color': 'white',
+                'ytick.color': 'white',
+                'axes.grid': True,
+                'grid.color': '#666666',
+                'grid.linewidth': 0.5,
+            })
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.dark_mode and self.original_params:
+            _plt.rcParams.update(self.original_params)
+
 _FLATUI_COLORS = [
     "#FEDD78",
     "#348DC1",
@@ -101,6 +143,7 @@ def plot_returns_bars(
         log_scale=False,
         figsize=(10, 6),
         grayscale=False,
+        dark_mode=False,
         fontname="Arial",
         ylabel=True,
         subtitle=True,
@@ -141,97 +184,115 @@ def plot_returns_bars(
     ax.spines["left"].set_visible(False)
 
     # use a more precise date string for the x axis locations in the toolbar
-    fig.suptitle(
-        title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color="black"
-    )
-
-    if subtitle:
-        ax.set_title(
-            "%s - %s           \n"
-            % (
-                df.index.date[:1][0].strftime("%Y"),
-                df.index.date[-1:][0].strftime("%Y"),
-            ),
-            fontsize=12,
-            color="gray",
+    text_color = "white" if dark_mode else "black"
+    subtitle_color = "#cccccc" if dark_mode else "gray"
+    bg_color = "#1a1a1a" if dark_mode else "white"
+    
+    with _DarkModeContext(dark_mode):
+        fig.suptitle(
+            title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color=text_color
         )
 
-    if benchmark is None:
-        colors = colors[1:]
-    df.plot(kind="bar", ax=ax, color=colors)
+        if subtitle:
+            ax.set_title(
+                "%s - %s           \n"
+                % (
+                    df.index.date[:1][0].strftime("%Y"),
+                    df.index.date[-1:][0].strftime("%Y"),
+                ),
+                fontsize=12,
+                color=subtitle_color,
+            )
 
-    fig.set_facecolor("white")
-    ax.set_facecolor("white")
+        if benchmark is None:
+            colors = colors[1:]
+        df.plot(kind="bar", ax=ax, color=colors)
 
-    try:
-        ax.set_xticklabels(df.index.year)
-        years = sorted(list(set(df.index.year)))
-    except AttributeError:
-        ax.set_xticklabels(df.index)
-        years = sorted(list(set(df.index)))
+        fig.set_facecolor(bg_color)
+        ax.set_facecolor(bg_color)
+        
+        if dark_mode:
+            ax.tick_params(colors="white")
+            ax.xaxis.label.set_color("white")
+            ax.yaxis.label.set_color("white")
+            for spine in ax.spines.values():
+                spine.set_color("white")
+            ax.grid(True, color='#666666', linewidth=0.5, alpha=1.0)
 
-    # ax.fmt_xdata = _mdates.DateFormatter('%Y-%m-%d')
-    # years = sorted(list(set(df.index.year)))
-    if len(years) > 10:
-        mod = int(len(years) / 10)
-        _plt.xticks(
-            _np.arange(len(years)),
-            [str(year) if not i % mod else "" for i, year in enumerate(years)],
-        )
+        try:
+            ax.set_xticklabels(df.index.year)
+            years = sorted(list(set(df.index.year)))
+        except AttributeError:
+            ax.set_xticklabels(df.index)
+            years = sorted(list(set(df.index)))
 
-    # rotate and align the tick labels so they look better
-    fig.autofmt_xdate()
+        # ax.fmt_xdata = _mdates.DateFormatter('%Y-%m-%d')
+        # years = sorted(list(set(df.index.year)))
+        if len(years) > 10:
+            mod = int(len(years) / 10)
+            _plt.xticks(
+                _np.arange(len(years)),
+                [str(year) if not i % mod else "" for i, year in enumerate(years)],
+            )
 
-    if hline is not None:
-        if not isinstance(hline, _pd.Series):
-            if grayscale:
-                hlcolor = "gray"
-            ax.axhline(hline, ls="--", lw=hlw, color=hlcolor, label=hllabel, zorder=2)
+        # rotate and align the tick labels so they look better
+        fig.autofmt_xdate()
 
-    ax.axhline(0, ls="--", lw=1, color="#000000", zorder=2)
+        if hline is not None:
+            if not isinstance(hline, _pd.Series):
+                if grayscale:
+                    hlcolor = "gray" if not dark_mode else "white"
+                ax.axhline(hline, ls="--", lw=hlw, color=hlcolor, label=hllabel, zorder=2)
 
-    # if isinstance(benchmark, _pd.Series) or hline:
-    ax.legend(fontsize=11)
+        ax.axhline(0, ls="--", lw=1, color="white" if dark_mode else "#000000", zorder=2)
 
-    _plt.yscale("symlog" if log_scale else "linear")
+        # if isinstance(benchmark, _pd.Series) or hline:
+        legend = ax.legend(fontsize=11)
+        if dark_mode and legend is not None:
+            for text in legend.get_texts():
+                text.set_color("white")
+            # Also style the legend frame for dark mode
+            legend.get_frame().set_facecolor('#1a1a1a')
+            legend.get_frame().set_edgecolor('white')
+            legend.get_frame().set_alpha(0.8)
 
-    ax.set_xlabel("")
-    if ylabel:
-        ax.set_ylabel(
-            "Returns", fontname=fontname, fontweight="bold", fontsize=12, color="black"
-        )
-        ax.yaxis.set_label_coords(-0.1, 0.5)
+        _plt.yscale("symlog" if log_scale else "linear")
 
-    ax.yaxis.set_major_formatter(_FuncFormatter(format_pct_axis))
+        ax.set_xlabel("")
+        if ylabel:
+            ax.set_ylabel(
+                "Returns", fontname=fontname, fontweight="bold", fontsize=12, color=text_color
+            )
+            ax.yaxis.set_label_coords(-0.1, 0.5)
 
-    if benchmark is None and len(_pd.DataFrame(returns).columns) == 1:
-        ax.get_legend().remove()
+        if benchmark is None and len(_pd.DataFrame(returns).columns) == 1:
+            ax.get_legend().remove()
 
-    try:
-        _plt.subplots_adjust(hspace=0, bottom=0, top=1)
-    except Exception:
-        pass
+        try:
+            _plt.subplots_adjust(hspace=0, bottom=0, top=1)
+        except Exception:
+            pass
 
-    try:
-        fig.tight_layout()
-    except Exception:
-        pass
+        try:
+            fig.tight_layout()
+        except Exception:
+            pass
 
-    if savefig:
-        if isinstance(savefig, dict):
-            _plt.savefig(**savefig)
-        else:
-            _plt.savefig(savefig)
+        if savefig:
+            if isinstance(savefig, dict):
+                _plt.savefig(**savefig)
+            else:
+                _plt.savefig(savefig)
 
-    if show:
-        _plt.show(block=False)
+        if show:
+            _plt.show(block=False)
 
-    _plt.close()
+        _plt.close()
 
-    if not show:
-        return fig
+        if not show:
+            return fig
 
-    return None
+        return None
 
 
 def plot_timeseries(
@@ -254,164 +315,185 @@ def plot_timeseries(
         figsize=(10, 6),
         ylabel="",
         grayscale=False,
+        dark_mode=False,
         fontname="Arial",
         subtitle=True,
         savefig=None,
         show=True,
 ):
-    colors, ls, alpha = _get_colors(grayscale)
-
-    returns.fillna(0, inplace=True)
-    if isinstance(benchmark, _pd.Series):
-        benchmark.fillna(0, inplace=True)
-
-    if match_volatility and benchmark is None:
-        raise ValueError("match_volatility requires passing of " "benchmark.")
-    if match_volatility and benchmark is not None:
-        bmark_vol = benchmark.std()
-        returns = (returns / returns.std()) * bmark_vol
-
-    # ---------------
-    if compound is True:
-        if cumulative:
-            returns = _stats.compsum(returns)
-            if isinstance(benchmark, _pd.Series):
-                benchmark = _stats.compsum(benchmark)
-        else:
-            returns = returns.cumsum()
-            if isinstance(benchmark, _pd.Series):
-                benchmark = benchmark.cumsum()
-
-    if resample:
-        returns = returns.resample(resample)
-        returns = returns.last() if compound is True else returns.sum()
+    with _DarkModeContext(dark_mode):
+        colors, ls, alpha = _get_colors(grayscale)
+        
+        returns.fillna(0, inplace=True)
         if isinstance(benchmark, _pd.Series):
-            benchmark = benchmark.resample(resample)
-            benchmark = benchmark.last() if compound is True else benchmark.sum()
-    # ---------------
+            benchmark.fillna(0, inplace=True)
 
-    fig, ax = _plt.subplots(figsize=figsize)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.spines["bottom"].set_visible(False)
-    ax.spines["left"].set_visible(False)
+        if match_volatility and benchmark is None:
+            raise ValueError("match_volatility requires passing of " "benchmark.")
+        if match_volatility and benchmark is not None:
+            bmark_vol = benchmark.std()
+            returns = (returns / returns.std()) * bmark_vol
 
-    fig.suptitle(
-        title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color="black"
-    )
+        # ---------------
+        if compound is True:
+            if cumulative:
+                returns = _stats.compsum(returns)
+                if isinstance(benchmark, _pd.Series):
+                    benchmark = _stats.compsum(benchmark)
+            else:
+                returns = returns.cumsum()
+                if isinstance(benchmark, _pd.Series):
+                    benchmark = benchmark.cumsum()
 
-    if subtitle:
-        ax.set_title(
-            "%s - %s            \n"
-            % (
-                returns.index.date[:1][0].strftime("%e %b '%y"),
-                returns.index.date[-1:][0].strftime("%e %b '%y"),
-            ),
-            fontsize=12,
-            color="gray",
+        if resample:
+            returns = returns.resample(resample)
+            returns = returns.last() if compound is True else returns.sum()
+            if isinstance(benchmark, _pd.Series):
+                benchmark = benchmark.resample(resample)
+                benchmark = benchmark.last() if compound is True else benchmark.sum()
+        # ---------------
+
+        fig, ax = _plt.subplots(figsize=figsize)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)
+        ax.spines["left"].set_visible(False)
+
+        text_color = "white" if dark_mode else "black"
+        subtitle_color = "#cccccc" if dark_mode else "gray"
+        bg_color = "#1a1a1a" if dark_mode else "white"
+        
+        fig.suptitle(
+            title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color=text_color
         )
 
-    fig.set_facecolor("white")
-    ax.set_facecolor("white")
+        if subtitle:
+            ax.set_title(
+                "%s - %s            \n"
+                % (
+                    returns.index.date[:1][0].strftime("%e %b '%y"),
+                    returns.index.date[-1:][0].strftime("%e %b '%y"),
+                ),
+                fontsize=12,
+                color=subtitle_color,
+            )
 
-    if isinstance(benchmark, _pd.Series):
-        ax.plot(benchmark, lw=lw, ls=ls, label=benchmark.name, color=colors[0])
+        fig.set_facecolor(bg_color)
+        ax.set_facecolor(bg_color)
 
-    alpha = 0.25 if grayscale else 1
-    if isinstance(returns, _pd.Series):
-        ax.plot(returns, lw=lw, label=returns.name, color=colors[1], alpha=alpha)
-    elif isinstance(returns, _pd.DataFrame):
-        # color_dict = {col: colors[i+1] for i, col in enumerate(returns.columns)}
-        for i, col in enumerate(returns.columns):
-            ax.plot(returns[col], lw=lw, label=col, alpha=alpha, color=colors[i + 1])
+        if isinstance(benchmark, _pd.Series):
+            ax.plot(benchmark, lw=lw, ls=ls, label=benchmark.name, color=colors[0])
 
-    if fill:
+        alpha = 0.25 if grayscale else 1
         if isinstance(returns, _pd.Series):
-            ax.fill_between(returns.index, 0, returns, color=colors[1], alpha=0.25)
+            ax.plot(returns, lw=lw, label=returns.name, color=colors[1], alpha=alpha)
         elif isinstance(returns, _pd.DataFrame):
+            # color_dict = {col: colors[i+1] for i, col in enumerate(returns.columns)}
             for i, col in enumerate(returns.columns):
-                ax.fill_between(
-                    returns[col].index, 0, returns[col], color=colors[i + 1], alpha=0.25
-                )
+                ax.plot(returns[col], lw=lw, label=col, alpha=alpha, color=colors[i + 1])
 
-    # rotate and align the tick labels so they look better
-    fig.autofmt_xdate()
+        if fill:
+            if isinstance(returns, _pd.Series):
+                ax.fill_between(returns.index, 0, returns, color=colors[1], alpha=0.25)
+            elif isinstance(returns, _pd.DataFrame):
+                for i, col in enumerate(returns.columns):
+                    ax.fill_between(
+                        returns[col].index, 0, returns[col], color=colors[i + 1], alpha=0.25
+                    )
 
-    # use a more precise date string for the x axis locations in the toolbar
-    # ax.fmt_xdata = _mdates.DateFormatter('%Y-%m-%d')
+        # rotate and align the tick labels so they look better
+        fig.autofmt_xdate()
 
-    if hline is not None:
-        if not isinstance(hline, _pd.Series):
-            if grayscale:
-                hlcolor = "black"
-            ax.axhline(hline, ls="--", lw=hlw, color=hlcolor, label=hllabel, zorder=2)
+        # use a more precise date string for the x axis locations in the toolbar
+        # ax.fmt_xdata = _mdates.DateFormatter('%Y-%m-%d')
 
-    ax.axhline(0, ls="-", lw=1, color="gray", zorder=1)
-    ax.axhline(0, ls="--", lw=1, color="white" if grayscale else "black", zorder=2)
+        if hline is not None:
+            if not isinstance(hline, _pd.Series):
+                if grayscale:
+                    hlcolor = "black" if not dark_mode else "white"
+                ax.axhline(hline, ls="--", lw=hlw, color=hlcolor, label=hllabel, zorder=2)
 
-    # if isinstance(benchmark, _pd.Series) or hline is not None:
-    ax.legend(fontsize=11)
+        ax.axhline(0, ls="-", lw=1, color="gray" if not dark_mode else "#444444", zorder=1)
+        ax.axhline(0, ls="--", lw=1, color="white" if (grayscale or dark_mode) else "black", zorder=2)
 
-    _plt.yscale("symlog" if log_scale else "linear")
+        # if isinstance(benchmark, _pd.Series) or hline is not None:
+        legend = ax.legend(fontsize=11)
+        if dark_mode and legend is not None:
+            for text in legend.get_texts():
+                text.set_color("white")
+            # Also style the legend frame for dark mode
+            legend.get_frame().set_facecolor('#1a1a1a')
+            legend.get_frame().set_edgecolor('white')
+            legend.get_frame().set_alpha(0.8)
 
-    # Set y-axis limits to avoid blank space at the bottom and top
-    min_val = returns.min()
-    max_val = returns.max()
-    if benchmark is not None:
-        min_val = min(min_val, benchmark.min())
-        max_val = max(max_val, benchmark.max())
+        _plt.yscale("symlog" if log_scale else "linear")
 
-    # Handle cases where min_val or max_val might be NaN or Inf
-    if not _np.isfinite(min_val) or not _np.isfinite(max_val) or min_val == max_val:
-        min_val = -1  # Default min value
-        max_val = 1   # Default max value
-        # if using percent, adjust defaults
+        # Set y-axis limits to avoid blank space at the bottom and top
+        min_val = returns.min()
+        max_val = returns.max()
+        if benchmark is not None:
+            min_val = min(min_val, benchmark.min())
+            max_val = max(max_val, benchmark.max())
+
+        # Handle cases where min_val or max_val might be NaN or Inf
+        if not _np.isfinite(min_val) or not _np.isfinite(max_val) or min_val == max_val:
+            min_val = -1  # Default min value
+            max_val = 1   # Default max value
+            # if using percent, adjust defaults
+            if percent:
+                min_val = -0.01
+                max_val = 0.01
+
+        ax.set_ylim(bottom=min_val, top=max_val)
+
         if percent:
-            min_val = -0.01
-            max_val = 0.01
+            ax.yaxis.set_major_formatter(_FuncFormatter(format_pct_axis))
+            # ax.yaxis.set_major_formatter(_plt.FuncFormatter(
+            #     lambda x, loc: "{:,}%".format(int(x*100))))
 
-    ax.set_ylim(bottom=min_val, top=max_val)
+        ax.set_xlabel("")
+        if ylabel:
+            ax.set_ylabel(
+                ylabel, fontname=fontname, fontweight="bold", fontsize=12, color=text_color
+            )
+        ax.yaxis.set_label_coords(-0.1, 0.5)
+        
+        # Update tick colors for dark mode
+        if dark_mode:
+            ax.tick_params(colors="white")
+            ax.xaxis.label.set_color("white")
+            ax.yaxis.label.set_color("white")
+            for spine in ax.spines.values():
+                spine.set_color("white")
 
-    if percent:
-        ax.yaxis.set_major_formatter(_FuncFormatter(format_pct_axis))
-        # ax.yaxis.set_major_formatter(_plt.FuncFormatter(
-        #     lambda x, loc: "{:,}%".format(int(x*100))))
+        if benchmark is None and len(_pd.DataFrame(returns).columns) == 1:
+            ax.get_legend().remove()
 
-    ax.set_xlabel("")
-    if ylabel:
-        ax.set_ylabel(
-            ylabel, fontname=fontname, fontweight="bold", fontsize=12, color="black"
-        )
-    ax.yaxis.set_label_coords(-0.1, 0.5)
+        try:
+            _plt.subplots_adjust(hspace=0, bottom=0, top=1)
+        except Exception:
+            pass
 
-    if benchmark is None and len(_pd.DataFrame(returns).columns) == 1:
-        ax.get_legend().remove()
+        try:
+            fig.tight_layout()
+        except Exception:
+            pass
 
-    try:
-        _plt.subplots_adjust(hspace=0, bottom=0, top=1)
-    except Exception:
-        pass
+        if savefig:
+            if isinstance(savefig, dict):
+                _plt.savefig(**savefig)
+            else:
+                _plt.savefig(savefig)
 
-    try:
-        fig.tight_layout()
-    except Exception:
-        pass
+        if show:
+            _plt.show(block=False)
 
-    if savefig:
-        if isinstance(savefig, dict):
-            _plt.savefig(**savefig)
-        else:
-            _plt.savefig(savefig)
+        _plt.close()
 
-    if show:
-        _plt.show(block=False)
+        if not show:
+            return fig
 
-    _plt.close()
-
-    if not show:
-        return fig
-
-    return None
+        return None
 
 
 def plot_histogram(
@@ -421,6 +503,7 @@ def plot_histogram(
         bins=20,
         fontname="Arial",
         grayscale=False,
+        dark_mode=False,
         title="Returns",
         kde=True,
         figsize=(10, 6),
@@ -458,95 +541,69 @@ def plot_histogram(
     ax.spines["bottom"].set_visible(False)
     ax.spines["left"].set_visible(False)
 
-    fig.suptitle(
-        title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color="black"
-    )
-
-    if subtitle:
-        ax.set_title(
-            "%s - %s           \n"
-            % (
-                returns.index.date[:1][0].strftime("%Y"),
-                returns.index.date[-1:][0].strftime("%Y"),
-            ),
-            fontsize=12,
-            color="gray",
+    text_color = "white" if dark_mode else "black"
+    subtitle_color = "#cccccc" if dark_mode else "gray"
+    bg_color = "#1a1a1a" if dark_mode else "white"
+    
+    with _DarkModeContext(dark_mode):
+        fig.suptitle(
+            title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color=text_color
         )
 
-    fig.set_facecolor("white")
-    ax.set_facecolor("white")
-
-    if isinstance(returns, _pd.DataFrame) and len(returns.columns) == 1:
-        returns = returns[returns.columns[0]]
-
-    pallete = colors[1:2] if benchmark is None else colors[:2]
-    alpha = 0.7
-    if isinstance(returns, _pd.DataFrame):
-        pallete = (
-            colors[1: len(returns.columns) + 1]
-            if benchmark is None
-            else colors[: len(returns.columns) + 1]
-        )
-        if len(returns.columns) > 1:
-            alpha = 0.5
-
-    fix_instance = lambda x: x[x.columns[0]] if isinstance(x, _pd.DataFrame) else x
-    if benchmark is not None:
-        if isinstance(returns, _pd.Series):
-            combined_returns = (
-                fix_instance(benchmark).to_frame()
-                .join(returns.to_frame())
-                .stack()
-                .reset_index()
-                .rename(columns={"level_1": "", 0: "Returns"})
+        if subtitle:
+            ax.set_title(
+                "%s - %s           \n"
+                % (
+                    returns.index.date[:1][0].strftime("%Y"),
+                    returns.index.date[-1:][0].strftime("%Y"),
+                ),
+                fontsize=12,
+                color=subtitle_color,
             )
-        elif isinstance(returns, _pd.DataFrame):
-            combined_returns = (
-                fix_instance(benchmark).to_frame()
-                .join(returns)
-                .stack()
-                .reset_index()
-                .rename(columns={"level_1": "", 0: "Returns"})
-            )
-        x = _sns.histplot(
-            data=combined_returns,
-            x="Returns",
-            bins=bins,
-            alpha=alpha,
-            kde=kde,
-            stat="density",
-            hue="",
-            palette=pallete,
-            ax=ax,
-        )
 
-    else:
-        if isinstance(returns, _pd.Series):
-            combined_returns = returns.copy()
-            if kde:
-                _sns.kdeplot(
-                    data=combined_returns,
-                    color="black",
-                    ax=ax,
-                    warn_singular=False,
+        fig.set_facecolor(bg_color)
+        ax.set_facecolor(bg_color)
+        
+        if dark_mode:
+            ax.tick_params(colors="white")
+            ax.xaxis.label.set_color("white")
+            ax.yaxis.label.set_color("white")
+            for spine in ax.spines.values():
+                spine.set_color("white")
+            ax.grid(True, color='#666666', linewidth=0.5, alpha=1.0)
+
+        if isinstance(returns, _pd.DataFrame) and len(returns.columns) == 1:
+            returns = returns[returns.columns[0]]
+
+        pallete = colors[1:2] if benchmark is None else colors[:2]
+        alpha = 0.7
+        if isinstance(returns, _pd.DataFrame):
+            pallete = (
+                colors[1: len(returns.columns) + 1]
+                if benchmark is None
+                else colors[: len(returns.columns) + 1]
+            )
+            if len(returns.columns) > 1:
+                alpha = 0.5
+
+        fix_instance = lambda x: x[x.columns[0]] if isinstance(x, _pd.DataFrame) else x
+        if benchmark is not None:
+            if isinstance(returns, _pd.Series):
+                combined_returns = (
+                    fix_instance(benchmark).to_frame()
+                    .join(returns.to_frame())
+                    .stack()
+                    .reset_index()
+                    .rename(columns={"level_1": "", 0: "Returns"})
                 )
-            x = _sns.histplot(
-                data=combined_returns,
-                bins=bins,
-                alpha=alpha,
-                kde=False,
-                stat="density",
-                color=colors[1],
-                ax=ax,
-            )
-
-        elif isinstance(returns, _pd.DataFrame):
-            combined_returns = (
-                returns.stack()
-                .reset_index()
-                .rename(columns={"level_1": "", 0: "Returns"})
-            )
-            # _sns.kdeplot(data=combined_returns, color='black', ax=ax, warn_singular=False)
+            elif isinstance(returns, _pd.DataFrame):
+                combined_returns = (
+                    fix_instance(benchmark).to_frame()
+                    .join(returns)
+                    .stack()
+                    .reset_index()
+                    .rename(columns={"level_1": "", 0: "Returns"})
+                )
             x = _sns.histplot(
                 data=combined_returns,
                 x="Returns",
@@ -559,59 +616,98 @@ def plot_histogram(
                 ax=ax,
             )
 
-    # Why do we need average?
-    if isinstance(combined_returns, _pd.Series) or len(combined_returns.columns) == 1:
-        ax.axvline(
-            combined_returns.mean(),
-            ls="--",
-            lw=1.5,
-            zorder=2,
-            label="Average",
-            color="red",
+        else:
+            if isinstance(returns, _pd.Series):
+                combined_returns = returns.copy()
+                if kde:
+                    _sns.kdeplot(
+                        data=combined_returns,
+                        color="white" if dark_mode else "black",
+                        ax=ax,
+                        warn_singular=False,
+                    )
+                x = _sns.histplot(
+                    data=combined_returns,
+                    bins=bins,
+                    alpha=alpha,
+                    kde=False,
+                    stat="density",
+                    color=colors[1],
+                    ax=ax,
+                )
+
+            elif isinstance(returns, _pd.DataFrame):
+                combined_returns = (
+                    returns.stack()
+                    .reset_index()
+                    .rename(columns={"level_1": "", 0: "Returns"})
+                )
+                # _sns.kdeplot(data=combined_returns, color='black', ax=ax, warn_singular=False)
+                x = _sns.histplot(
+                    data=combined_returns,
+                    x="Returns",
+                    bins=bins,
+                    alpha=alpha,
+                    kde=kde,
+                    stat="density",
+                    hue="",
+                    palette=pallete,
+                    ax=ax,
+                )
+
+        # Why do we need average?
+        if isinstance(combined_returns, _pd.Series) or len(combined_returns.columns) == 1:
+            ax.axvline(
+                combined_returns.mean(),
+                ls="--",
+                lw=1.5,
+                zorder=2,
+                label="Average",
+                color="red" if not dark_mode else "orange",
+            )
+
+        # _plt.setp(x.get_legend().get_texts(), fontsize=11)
+        ax.xaxis.set_major_formatter(
+            _plt.FuncFormatter(lambda x, loc: "{:,}%".format(int(x * 100)))
         )
 
-    # _plt.setp(x.get_legend().get_texts(), fontsize=11)
-    ax.xaxis.set_major_formatter(
-        _plt.FuncFormatter(lambda x, loc: "{:,}%".format(int(x * 100)))
-    )
+        # Removed static lines for clarity
+        # ax.axhline(0.01, lw=1, color="#000000", zorder=2)
+        # ax.axvline(0, lw=1, color="#000000", zorder=2)
 
-    # Removed static lines for clarity
-    # ax.axhline(0.01, lw=1, color="#000000", zorder=2)
-    # ax.axvline(0, lw=1, color="#000000", zorder=2)
+        ax.set_xlabel("")
+        ax.set_ylabel(
+            "Occurrences", fontname=fontname, fontweight="bold", fontsize=12, color=text_color
+        )
+        ax.yaxis.set_label_coords(-0.1, 0.5)
 
-    ax.set_xlabel("")
-    ax.set_ylabel(
-        "Occurrences", fontname=fontname, fontweight="bold", fontsize=12, color="black"
-    )
-    ax.yaxis.set_label_coords(-0.1, 0.5)
+        # fig.autofmt_xdate()
 
-    # fig.autofmt_xdate()
+        try:
+            _plt.subplots_adjust(hspace=0, bottom=0, top=1)
+        except Exception:
+            pass
 
-    try:
-        _plt.subplots_adjust(hspace=0, bottom=0, top=1)
-    except Exception:
-        pass
+        try:
+            fig.tight_layout()
+        except Exception:
+            pass
 
-    try:
-        fig.tight_layout()
-    except Exception:
-        pass
+        if savefig:
+            if isinstance(savefig, dict):
+                _plt.savefig(**savefig)
+            else:
+                _plt.savefig(savefig)
 
-    if savefig:
-        if isinstance(savefig, dict):
-            _plt.savefig(**savefig)
-        else:
-            _plt.savefig(savefig)
+        if show:
+            _plt.show(block=False)
 
-    if show:
-        _plt.show(block=False)
+        _plt.close()
 
-    _plt.close()
+        if not show:
+            return fig
 
-    if not show:
-        return fig
-
-    return None
+        return None
 
 
 def plot_rolling_stats(
@@ -627,14 +723,19 @@ def plot_rolling_stats(
         figsize=(10, 6),
         ylabel="",
         grayscale=False,
+        dark_mode=False,
         fontname="Arial",
         subtitle=True,
         savefig=None,
         show=True,
 ):
     colors, _, _ = _get_colors(grayscale)
+    text_color = "white" if dark_mode else "black"
+    subtitle_color = "#cccccc" if dark_mode else "gray"
+    bg_color = "#1a1a1a" if dark_mode else "white"
 
-    fig, ax = _plt.subplots(figsize=figsize)
+    with _DarkModeContext(dark_mode):
+        fig, ax = _plt.subplots(figsize=figsize)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["bottom"].set_visible(False)
@@ -681,7 +782,7 @@ def plot_rolling_stats(
     # use a more precise date string for the x axis locations in the toolbar
     # ax.fmt_xdata = _mdates.DateFormatter('%Y-%m-%d')\
     fig.suptitle(
-        title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color="black"
+        title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color=text_color
     )
 
     if subtitle:
@@ -692,26 +793,43 @@ def plot_rolling_stats(
                 df.index.date[-1:][0].strftime("%e %b '%y"),
             ),
             fontsize=12,
-            color="gray",
+            color=subtitle_color,
         )
+
+    fig.set_facecolor(bg_color)
+    ax.set_facecolor(bg_color)
 
     if hline is not None:
         if not isinstance(hline, _pd.Series):
             if grayscale:
-                hlcolor = "black"
+                hlcolor = "black" if not dark_mode else "white"
             ax.axhline(hline, ls="--", lw=hlw, color=hlcolor, label=hllabel, zorder=2)
 
-    ax.axhline(0, ls="--", lw=1, color="#000000", zorder=2)
+    ax.axhline(0, ls="--", lw=1, color="white" if dark_mode else "#000000", zorder=2)
 
     if ylabel:
         ax.set_ylabel(
-            ylabel, fontname=fontname, fontweight="bold", fontsize=12, color="black"
+            ylabel, fontname=fontname, fontweight="bold", fontsize=12, color=text_color
         )
         ax.yaxis.set_label_coords(-0.1, 0.5)
+    
+    if dark_mode:
+        ax.tick_params(colors="white")
+        ax.xaxis.label.set_color("white")
+        ax.yaxis.label.set_color("white")
+        for spine in ax.spines.values():
+            spine.set_color("white")
 
     ax.yaxis.set_major_formatter(_FormatStrFormatter("%.2f"))
 
-    ax.legend(fontsize=11)
+    legend = ax.legend(fontsize=11)
+    if dark_mode and legend is not None:
+        for text in legend.get_texts():
+            text.set_color("white")
+        # Also style the legend frame for dark mode
+        legend.get_frame().set_facecolor('#1a1a1a')
+        legend.get_frame().set_edgecolor('white')
+        legend.get_frame().set_alpha(0.8)
 
     if benchmark is None and len(_pd.DataFrame(returns).columns) == 1:
         ax.get_legend().remove()
@@ -753,6 +871,7 @@ def plot_rolling_beta(
         hlcolor="red",
         figsize=(10, 6),
         grayscale=False,
+        dark_mode=False,
         fontname="Arial",
         lw=1.5,
         ylabel=True,
@@ -761,15 +880,19 @@ def plot_rolling_beta(
         show=True,
 ):
     colors, _, _ = _get_colors(grayscale)
+    text_color = "white" if dark_mode else "black"
+    subtitle_color = "#cccccc" if dark_mode else "gray"
+    bg_color = "#1a1a1a" if dark_mode else "white"
 
-    fig, ax = _plt.subplots(figsize=figsize)
+    with _DarkModeContext(dark_mode):
+        fig, ax = _plt.subplots(figsize=figsize)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["bottom"].set_visible(False)
     ax.spines["left"].set_visible(False)
 
     fig.suptitle(
-        title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color="black"
+        title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color=text_color
     )
 
     if subtitle:
@@ -780,8 +903,11 @@ def plot_rolling_beta(
                 returns.index.date[-1:][0].strftime("%e %b '%y"),
             ),
             fontsize=12,
-            color="gray",
+            color=subtitle_color,
         )
+
+    fig.set_facecolor(bg_color)
+    ax.set_facecolor(bg_color)
 
     i = 1
     if isinstance(returns, _pd.Series):
@@ -841,10 +967,10 @@ def plot_rolling_beta(
     ax.set_yticks([x / 100 for x in list(range(mmin, mmax, step))])
 
     if isinstance(returns, _pd.Series):
-        hlcolor = "black" if grayscale else hlcolor
+        hlcolor = "black" if (grayscale and not dark_mode) else ("white" if dark_mode else hlcolor)
         ax.axhline(beta.mean(), ls="--", lw=1.5, color=hlcolor, zorder=2)
 
-    ax.axhline(0, ls="--", lw=1, color="#000000", zorder=2)
+    ax.axhline(0, ls="--", lw=1, color="white" if dark_mode else "#000000", zorder=2)
 
     fig.autofmt_xdate()
 
@@ -853,11 +979,25 @@ def plot_rolling_beta(
 
     if ylabel:
         ax.set_ylabel(
-            "Beta", fontname=fontname, fontweight="bold", fontsize=12, color="black"
+            "Beta", fontname=fontname, fontweight="bold", fontsize=12, color=text_color
         )
         ax.yaxis.set_label_coords(-0.1, 0.5)
+    
+    if dark_mode:
+        ax.tick_params(colors="white")
+        ax.xaxis.label.set_color("white")
+        ax.yaxis.label.set_color("white")
+        for spine in ax.spines.values():
+            spine.set_color("white")
 
-    ax.legend(fontsize=11)
+    legend = ax.legend(fontsize=11)
+    if dark_mode and legend is not None:
+        for text in legend.get_texts():
+            text.set_color("white")
+        # Also style the legend frame for dark mode
+        legend.get_frame().set_facecolor('#1a1a1a')
+        legend.get_frame().set_edgecolor('white')
+        legend.get_frame().set_alpha(0.8)
     if benchmark is None and len(_pd.DataFrame(returns).columns) == 1:
         ax.get_legend().remove()
 
@@ -871,11 +1011,11 @@ def plot_rolling_beta(
     except Exception:
         pass
 
-    if savefig:
-        if isinstance(savefig, dict):
-            _plt.savefig(**savefig)
-        else:
-            _plt.savefig(savefig)
+        if savefig:
+            if isinstance(savefig, dict):
+                _plt.savefig(**savefig)
+            else:
+                _plt.savefig(savefig)
 
     if show:
         _plt.show(block=False)
@@ -894,6 +1034,7 @@ def plot_longest_drawdowns(
         lw=1.5,
         fontname="Arial",
         grayscale=False,
+        dark_mode=False,
         title=None,
         log_scale=False,
         figsize=(10, 6),
@@ -919,91 +1060,105 @@ def plot_longest_drawdowns(
     ax.spines["bottom"].set_visible(False)
     ax.spines["left"].set_visible(False)
 
-    fig.suptitle(
-        f"{title} - Worst %.0f Drawdown Periods" % periods + (" (Log Scaled)" if log_scale else ""),
-        y=0.94,
-        fontweight="bold",
-        fontname=fontname,
-        fontsize=14,
-        color="black",
-    )
-    if subtitle:
-        ax.set_title(
-            "%s - %s           \n"
-            % (
-                returns.index.date[:1][0].strftime("%e %b '%y"),
-                returns.index.date[-1:][0].strftime("%e %b '%y"),
-            ),
-            fontsize=12,
-            color="gray",
-        )
-
-    fig.set_facecolor("white")
-    ax.set_facecolor("white")
-    series = _stats.compsum(returns) if compounded else returns.cumsum()
-    ax.plot(series, lw=lw, label="Backtest", color=colors[0])
-
-    highlight = "black" if grayscale else "red"
-    for _, row in longest_dd.iterrows():
-        ax.axvspan(
-            *_mdates.datestr2num([str(row["start"]), str(row["end"])]),
-            color=highlight,
-            alpha=0.1,
-        )
-
-    # rotate and align the tick labels so they look better
-    fig.autofmt_xdate()
-
-    # use a more precise date string for the x axis locations in the toolbar
-    ax.fmt_xdata = _mdates.DateFormatter("%Y-%m-%d")
-
-    ax.axhline(0, ls="--", lw=1, color="#000000", zorder=2)
-    _plt.yscale("symlog" if log_scale else "linear")
-
-    # Set y-axis limits to avoid blank space at the bottom and top
-    ax.set_ylim(bottom=series.min(), top=series.max())
-
-    if ylabel:
-        ax.set_ylabel(
-            "Cumulative Returns",
-            fontname=fontname,
+    text_color = "white" if dark_mode else "black"
+    subtitle_color = "#cccccc" if dark_mode else "gray"
+    bg_color = "#1a1a1a" if dark_mode else "white"
+    
+    with _DarkModeContext(dark_mode):
+        fig.suptitle(
+            f"{title} - Worst %.0f Drawdown Periods" % periods + (" (Log Scaled)" if log_scale else ""),
+            y=0.94,
             fontweight="bold",
-            fontsize=12,
-            color="black",
+            fontname=fontname,
+            fontsize=14,
+            color=text_color,
         )
-        ax.yaxis.set_label_coords(-0.1, 0.5)
+        if subtitle:
+            ax.set_title(
+                "%s - %s           \n"
+                % (
+                    returns.index.date[:1][0].strftime("%e %b '%y"),
+                    returns.index.date[-1:][0].strftime("%e %b '%y"),
+                ),
+                fontsize=12,
+                color=subtitle_color,
+            )
 
-    ax.yaxis.set_major_formatter(_FuncFormatter(format_pct_axis))
-    # ax.yaxis.set_major_formatter(_plt.FuncFormatter(
-    #     lambda x, loc: "{:,}%".format(int(x*100))))
+        fig.set_facecolor(bg_color)
+        ax.set_facecolor(bg_color)
+        series = _stats.compsum(returns) if compounded else returns.cumsum()
+        ax.plot(series, lw=lw, label="Backtest", color=colors[0])
 
-    fig.autofmt_xdate()
+        highlight = "black" if (grayscale and not dark_mode) else ("#ff6666" if dark_mode else "red")
+        highlight_alpha = 0.2 if dark_mode else 0.1
+        for _, row in longest_dd.iterrows():
+            ax.axvspan(
+                *_mdates.datestr2num([str(row["start"]), str(row["end"])]),
+                color=highlight,
+                alpha=highlight_alpha,
+            )
 
-    try:
-        _plt.subplots_adjust(hspace=0, bottom=0, top=1)
-    except Exception:
-        pass
+        # rotate and align the tick labels so they look better
+        fig.autofmt_xdate()
 
-    try:
-        fig.tight_layout()
-    except Exception:
-        pass
+        # use a more precise date string for the x axis locations in the toolbar
+        ax.fmt_xdata = _mdates.DateFormatter("%Y-%m-%d")
 
-    if savefig:
-        if isinstance(savefig, dict):
-            _plt.savefig(**savefig)
-        else:
-            _plt.savefig(savefig)
+        ax.axhline(0, ls="--", lw=1, color="white" if dark_mode else "#000000", zorder=2)
+        _plt.yscale("symlog" if log_scale else "linear")
 
-    if show:
-        _plt.show(block=False)
+        # Set y-axis limits to avoid blank space at the bottom and top
+        ax.set_ylim(bottom=series.min(), top=series.max())
 
-    _plt.close()
+        if ylabel:
+            ax.set_ylabel(
+                "Cumulative Returns",
+                fontname=fontname,
+                fontweight="bold",
+                fontsize=12,
+                color=text_color,
+            )
+            ax.yaxis.set_label_coords(-0.1, 0.5)
+        
+        if dark_mode:
+            ax.tick_params(colors="white")
+            ax.xaxis.label.set_color("white")
+            ax.yaxis.label.set_color("white")
+            for spine in ax.spines.values():
+                spine.set_color("white")
+            ax.grid(True, color='#666666', linewidth=0.5, alpha=1.0)
 
-    if not show:
-        return fig
+        ax.yaxis.set_major_formatter(_FuncFormatter(format_pct_axis))
+        # ax.yaxis.set_major_formatter(_plt.FuncFormatter(
+        #     lambda x, loc: "{:,}%".format(int(x*100))))
 
-    return None
+        fig.autofmt_xdate()
+
+        try:
+            _plt.subplots_adjust(hspace=0, bottom=0, top=1)
+        except Exception:
+            pass
+
+        try:
+            fig.tight_layout()
+        except Exception:
+            pass
+
+        if savefig:
+            if isinstance(savefig, dict):
+                _plt.savefig(**savefig)
+            else:
+                _plt.savefig(savefig)
+
+        if show:
+            _plt.show(block=False)
+
+        _plt.close()
+
+        if not show:
+            return fig
+
+        return None
 
 
 def plot_distribution(
@@ -1011,6 +1166,7 @@ def plot_distribution(
         figsize=(10, 6),
         fontname="Arial",
         grayscale=False,
+        dark_mode=False,
         ylabel=True,
         subtitle=True,
         compounded=True,
@@ -1041,83 +1197,94 @@ def plot_distribution(
     port["Yearly"] = port["Daily"].resample("YE").apply(apply_fnc)
     port["Yearly"] = port["Yearly"].ffill()
 
-    fig, ax = _plt.subplots(figsize=figsize)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.spines["bottom"].set_visible(False)
-    ax.spines["left"].set_visible(False)
-
-    if title:
-        title = f"{title} - Return Quantiles"
-    else:
-        title = "Return Quantiles"
-    fig.suptitle(
-        title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color="black"
-    )
-
-    if subtitle:
-        ax.set_title(
-            "%s - %s            \n"
-            % (
-                returns.index.date[:1][0].strftime("%e %b '%y"),
-                returns.index.date[-1:][0].strftime("%e %b '%y"),
-            ),
-            fontsize=12,
-            color="gray",
-        )
-
-    fig.set_facecolor("white")
-    ax.set_facecolor("white")
-
-    _sns.boxplot(
-        data=port,
-        ax=ax,
-        palette={
-            "Daily": colors[0],
-            "Weekly": colors[1],
-            "Monthly": colors[2],
-            "Quarterly": colors[3],
-            "Yearly": colors[4],
-        },
-    )
-
-    _plt.yscale("symlog" if log_scale else "linear")
-    ax.yaxis.set_major_formatter(
-        _plt.FuncFormatter(lambda x, loc: "{:,}%".format(int(x * 100)))
-    )
-
-    if ylabel:
-        ax.set_ylabel(
-            "Returns", fontname=fontname, fontweight="bold", fontsize=12, color="black"
-        )
-        ax.yaxis.set_label_coords(-0.1, 0.5)
-
-    fig.autofmt_xdate()
-
-    try:
-        _plt.subplots_adjust(hspace=0)
-    except Exception:
-        pass
-    try:
-        fig.tight_layout(w_pad=0, h_pad=0)
-    except Exception:
-        pass
-
-    if savefig:
-        if isinstance(savefig, dict):
-            _plt.savefig(**savefig)
+    text_color = "white" if dark_mode else "black"
+    subtitle_color = "#cccccc" if dark_mode else "gray"
+    bg_color = "#1a1a1a" if dark_mode else "white"
+    
+    with _DarkModeContext(dark_mode):
+        fig, ax = _plt.subplots(figsize=figsize)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)
+        ax.spines["left"].set_visible(False)
+        if title:
+            title = f"{title} - Return Quantiles"
         else:
-            _plt.savefig(savefig)
+            title = "Return Quantiles"
+        fig.suptitle(
+            title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color=text_color
+        )
 
-    if show:
-        _plt.show(block=False)
+        if subtitle:
+            ax.set_title(
+                "%s - %s            \n"
+                % (
+                    returns.index.date[:1][0].strftime("%e %b '%y"),
+                    returns.index.date[-1:][0].strftime("%e %b '%y"),
+                ),
+                fontsize=12,
+                color=subtitle_color,
+            )
 
-    _plt.close()
+        fig.set_facecolor(bg_color)
+        ax.set_facecolor(bg_color)
+        
+        if dark_mode:
+            ax.tick_params(colors="white")
+            ax.xaxis.label.set_color("white")
+            ax.yaxis.label.set_color("white")
+            for spine in ax.spines.values():
+                spine.set_color("white")
 
-    if not show:
-        return fig
+        _sns.boxplot(
+            data=port,
+            ax=ax,
+            palette={
+                "Daily": colors[0],
+                "Weekly": colors[1],
+                "Monthly": colors[2],
+                "Quarterly": colors[3],
+                "Yearly": colors[4],
+            },
+        )
 
-    return None
+        _plt.yscale("symlog" if log_scale else "linear")
+        ax.yaxis.set_major_formatter(
+            _plt.FuncFormatter(lambda x, loc: "{:,}%".format(int(x * 100)))
+        )
+
+        if ylabel:
+            ax.set_ylabel(
+                "Returns", fontname=fontname, fontweight="bold", fontsize=12, color=text_color
+            )
+            ax.yaxis.set_label_coords(-0.1, 0.5)
+
+        fig.autofmt_xdate()
+
+        try:
+            _plt.subplots_adjust(hspace=0)
+        except Exception:
+            pass
+        try:
+            fig.tight_layout(w_pad=0, h_pad=0)
+        except Exception:
+            pass
+
+        if savefig:
+            if isinstance(savefig, dict):
+                _plt.savefig(**savefig)
+            else:
+                _plt.savefig(savefig)
+
+        if show:
+            _plt.show(block=False)
+
+        _plt.close()
+
+        if not show:
+            return fig
+
+        return None
 
 
 def plot_table(
